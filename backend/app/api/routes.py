@@ -1,6 +1,6 @@
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
-from app.schemas.job import ExportResponse, JobResponse
+from app.schemas.job import ExportResponse, JobResponse, ReorderPagesRequest, UpdatePageRequest
 from app.services.job_service import job_service
 
 router = APIRouter()
@@ -30,3 +30,19 @@ def export_job(job_id: str) -> ExportResponse:
     if export_result is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return export_result
+
+
+@router.patch("/jobs/{job_id}/pages/{page_id}", response_model=JobResponse)
+def update_page(job_id: str, page_id: str, payload: UpdatePageRequest) -> JobResponse:
+    job = job_service.update_page(job_id, page_id, payload)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job or page not found")
+    return job
+
+
+@router.post("/jobs/{job_id}/pages/reorder", response_model=JobResponse)
+def reorder_pages(job_id: str, payload: ReorderPagesRequest) -> JobResponse:
+    job = job_service.reorder_pages(job_id, payload)
+    if job is None:
+        raise HTTPException(status_code=400, detail="Invalid page order or job not found")
+    return job

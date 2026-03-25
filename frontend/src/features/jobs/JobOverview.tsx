@@ -4,18 +4,32 @@ import { SectionCard } from "../../components/SectionCard";
 interface JobOverviewProps {
   jobs: ProcessingJob[];
   activeJob: ProcessingJob | null;
+  isLoading: boolean;
   onSelectJob: (jobId: string) => void;
 }
 
 export function JobOverview({
   jobs,
   activeJob,
+  isLoading,
   onSelectJob,
 }: JobOverviewProps) {
   return (
-    <SectionCard eyebrow="Jobs" title="Processing sessions">
-      {jobs.length === 0 ? (
-        <p className="muted">No jobs yet. Upload a recording to create one.</p>
+    <SectionCard
+      eyebrow="Sessions"
+      title="Processing sessions"
+      subtitle="Each upload creates one reconstruction session with its own extracted page set."
+    >
+      {isLoading ? (
+        <div className="empty-state">
+          <strong>Loading sessions</strong>
+          <p>Reading the current reconstruction workspace.</p>
+        </div>
+      ) : jobs.length === 0 ? (
+        <div className="empty-state">
+          <strong>No sessions yet</strong>
+          <p>Upload your first recording to start building a reviewable page set.</p>
+        </div>
       ) : (
         <div className="job-list">
           {jobs.map((job) => (
@@ -25,9 +39,15 @@ export function JobOverview({
               onClick={() => onSelectJob(job.id)}
               type="button"
             >
-              <span className="job-tile__title">{job.filename}</span>
+              <div className="job-tile__head">
+                <span className="job-tile__title">{job.filename}</span>
+                <span className={`job-status job-status--${job.status}`}>{job.status}</span>
+              </div>
               <span className="job-tile__meta">
-                {job.pages.length} pages · {job.status}
+                {job.pages.length} extracted pages
+              </span>
+              <span className="job-tile__meta">
+                Created {new Date(job.createdAt).toLocaleDateString()}
               </span>
             </button>
           ))}

@@ -39,10 +39,19 @@ export function UploadPanel({ onJobCreated }: UploadPanelProps) {
   }
 
   return (
-    <SectionCard eyebrow="Input" title="Upload a screen recording">
+    <SectionCard
+      eyebrow="Input"
+      title="Upload a source recording"
+      subtitle="Start with one screen recording of a document, report, ebook, or slide deck."
+    >
       <form className="upload-form" onSubmit={handleSubmit}>
         <label className="upload-dropzone">
-          <span>Choose one document-viewing video</span>
+          <span className="upload-dropzone__eyebrow">Drag in a file or browse</span>
+          <strong>Choose one document-viewing video</strong>
+          <p>
+            Best for full-screen page viewing with clear pauses between page
+            changes.
+          </p>
           <input
             accept="video/*"
             name="file"
@@ -52,17 +61,31 @@ export function UploadPanel({ onJobCreated }: UploadPanelProps) {
             }
           />
         </label>
-        <p className="muted">
-          Designed for recordings of digital pages, reports, ebooks, and slide
-          decks viewed page by page.
-        </p>
+        <div className="upload-notes">
+          <span>One video in</span>
+          <span>Stable pages detected</span>
+          <span>Final PDF out</span>
+        </div>
         {selectedFile ? (
-          <p className="selected-file">Selected: {selectedFile.name}</p>
+          <div className="selected-file">
+            <span className="selected-file__label">Selected file</span>
+            <strong>{selectedFile.name}</strong>
+          </div>
         ) : null}
-        {error ? <p className="error-text">{error}</p> : null}
-        <button className="primary-button" disabled={isSubmitting} type="submit">
-          {isSubmitting ? "Processing..." : "Start reconstruction"}
-        </button>
+        {error ? (
+          <div className="status-banner status-banner--error">
+            <strong>Upload could not start.</strong>
+            <span>{error}</span>
+          </div>
+        ) : null}
+        <div className="upload-actions">
+          <button className="primary-button" disabled={isSubmitting} type="submit">
+            {isSubmitting ? "Preparing session..." : "Start reconstruction"}
+          </button>
+          <span className="upload-actions__hint">
+            The backend now creates a real job record, tracks pipeline progress, and exposes extracted pages for review.
+          </span>
+        </div>
       </form>
     </SectionCard>
   );

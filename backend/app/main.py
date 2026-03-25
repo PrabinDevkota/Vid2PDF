@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router
+from app.core.settings import settings
 
 app = FastAPI(
     title="Vid2PDF API",
@@ -24,3 +26,4 @@ def health_check() -> dict[str, str]:
 
 
 app.include_router(router, prefix="/api")
+app.mount("/artifacts", StaticFiles(directory=f"{settings.storage_path}/exports"), name="artifacts")
