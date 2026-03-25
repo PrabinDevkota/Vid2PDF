@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ProcessingJob } from "../../types";
 import { SectionCard } from "../../components/SectionCard";
-import { reorderPages, startExport, updatePage } from "../../lib/api";
+import { reorderPages, resolveArtifactUrl, startExport, updatePage } from "../../lib/api";
 
 interface PageReviewBoardProps {
   job: ProcessingJob | null;
@@ -179,7 +179,12 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                     : job.export.error ?? "Export could not be completed."}
               </span>
               {job.export.downloadUrl ? (
-                <a className="download-link" href={job.export.downloadUrl} target="_blank" rel="noreferrer">
+                <a
+                  className="download-link"
+                  href={resolveArtifactUrl(job.export.downloadUrl)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   Download exported PDF
                 </a>
               ) : null}
@@ -210,11 +215,11 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                 <article className="page-card" key={page.id}>
                   <div className="page-card__preview">
                     <div className="page-card__preview-tag">Page preview</div>
-                    {page.thumbnailUrl ? (
+                    {resolveArtifactUrl(page.thumbnailUrl) ? (
                       <img
                         alt={page.previewLabel}
                         className="page-preview-image"
-                        src={page.thumbnailUrl}
+                        src={resolveArtifactUrl(page.thumbnailUrl) ?? undefined}
                         style={{ transform: `rotate(${page.rotation}deg)` }}
                       />
                     ) : (

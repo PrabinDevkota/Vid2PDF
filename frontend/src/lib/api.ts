@@ -1,6 +1,9 @@
 import type { ProcessingJob } from "../types";
 
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ||
+  `${window.location.protocol}//${window.location.hostname}:8000`;
+const ARTIFACT_BASE_URL = `${API_BASE_URL}/artifacts`;
 
 async function readJson<T>(response: Response, fallbackMessage: string): Promise<T> {
   if (!response.ok) {
@@ -72,4 +75,24 @@ export async function startExport(jobId: string): Promise<ProcessingJob["export"
   });
 
   return readJson<ProcessingJob["export"]>(response, "Failed to start export");
+}
+
+export function resolveArtifactUrl(url: string | null): string | null {
+  if (!url) {
+    return null;
+  }
+
+  if (url.startsWith("data:") || url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+
+  if (url.startsWith("/artifacts/")) {
+    return `${ARTIFACT_BASE_URL}${url.replace("/artifacts", "")}`;
+  }
+
+  if (url.startsWith("artifacts/")) {
+    return `${API_BASE_URL}/${url}`;
+  }
+
+  return url;
 }

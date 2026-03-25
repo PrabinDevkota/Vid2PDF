@@ -1,4 +1,8 @@
+import logging
+
 from app.processing.types import SelectedPage
+
+logger = logging.getLogger(__name__)
 
 
 def remove_duplicates(
@@ -6,6 +10,7 @@ def remove_duplicates(
     max_hamming_distance: int = 6,
 ) -> list[SelectedPage]:
     unique_pages: list[SelectedPage] = []
+    removed_count = 0
 
     for page in pages:
         page_hash = page.selected_frame.quality.perceptual_hash
@@ -16,12 +21,21 @@ def remove_duplicates(
         )
         if not is_duplicate:
             unique_pages.append(page)
+        else:
+            removed_count += 1
 
     for index, page in enumerate(unique_pages, start=1):
         page.page_number = index
         page.label = f"Page {index}"
         page.page_id = f"page-{index}"
 
+    logger.info(
+        "Deduplication complete: input_pages=%s, kept_pages=%s, removed_pages=%s, max_hamming_distance=%s",
+        len(pages),
+        len(unique_pages),
+        removed_count,
+        max_hamming_distance,
+    )
     return unique_pages
 
 

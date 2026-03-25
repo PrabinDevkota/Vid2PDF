@@ -88,6 +88,7 @@ class JobService:
             page.deleted = payload.deleted
             page.status = "deleted" if payload.deleted else "active"
 
+        self._invalidate_export(job)
         job.updated_at = datetime.now(timezone.utc)
         return self._to_response(job)
 
@@ -106,6 +107,7 @@ class JobService:
             page.order_index = index
             page.page_number = index + 1
         job.pages = reordered_pages
+        self._invalidate_export(job)
         job.updated_at = datetime.now(timezone.utc)
         return self._to_response(job)
 
@@ -116,13 +118,12 @@ class JobService:
             return None
 
         now = datetime.now(timezone.utc)
-        if job.export.status in {"idle", "failed"}:
-            job.export = ExportArtifact(
-                status="processing",
-                progress_percent=5,
-                requested_at=now,
-            )
-            job.updated_at = now
+        job.export = ExportArtifact(
+            status="processing",
+            progress_percent=5,
+            requested_at=now,
+        )
+        job.updated_at = now
 
         self._sync_export(job)
         return self._to_export_response(job.export)
@@ -263,6 +264,10 @@ class JobService:
             return
 
         selected_pages = [self._to_selected_page(page) for page in active_pages]
+        print(
+            f"[Vid2PDF export] job={job.id} active_pages={len(active_pages)} "
+            f"page_ids={[page.id for page in active_pages]}"
+        )
         artifact = build_export(
             job_id=job.id,
             pages=selected_pages,
@@ -379,6 +384,9 @@ class JobService:
             completedAt=export.completed_at,
             error=export.error,
         )
+
+    def _invalidate_export(self, job: Job) -> None:
+        job.export = ExportArtifact()
 
 
 job_service = JobService()

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ProcessingJob } from "../../types";
 import { uploadVideo } from "../../lib/api";
 import { SectionCard } from "../../components/SectionCard";
@@ -11,6 +11,7 @@ export function UploadPanel({ onJobCreated }: UploadPanelProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -26,7 +27,9 @@ export function UploadPanel({ onJobCreated }: UploadPanelProps) {
       const job = await uploadVideo(selectedFile);
       onJobCreated(job);
       setSelectedFile(null);
-      event.currentTarget.reset();
+      if (inputRef.current) {
+        inputRef.current.value = "";
+      }
     } catch (submissionError) {
       setError(
         submissionError instanceof Error
@@ -55,6 +58,7 @@ export function UploadPanel({ onJobCreated }: UploadPanelProps) {
           <input
             accept="video/*"
             name="file"
+            ref={inputRef}
             type="file"
             onChange={(event) =>
               setSelectedFile(event.target.files?.[0] ?? null)

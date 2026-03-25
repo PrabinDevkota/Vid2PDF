@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 
 from app.core.settings import settings
@@ -9,6 +10,8 @@ from app.processing.sampler import load_video_metadata, sample_frames
 from app.processing.segmenter import detect_stable_segments
 from app.processing.selector import select_best_frames
 from app.processing.types import PipelineContext, SelectedPage, VideoMetadata
+
+logger = logging.getLogger(__name__)
 
 PIPELINE_STAGES = [
     ("sample_frames", "Sample frames from the uploaded video"),
@@ -39,17 +42,31 @@ def run_reconstruction_pipeline(job_id: str, upload_path: str) -> PipelineResult
         frames=sampled_frames,
         min_seconds=settings.stable_segment_min_seconds,
         max_change_ratio=settings.stable_segment_max_change_ratio,
+        hash_distance_threshold=settings.stable_segment_hash_distance_threshold,
+        mean_diff_threshold=settings.stable_segment_mean_diff_threshold,
     )
     selected_pages = select_best_frames(segments)
-    unique_pages = remove_duplicates(selected_pages)
+    unique_pages = remove_duplicates(
+        selected_pages,
+        max_hamming_distance=settings.dedupe_max_hash_distance,
+    )
     if not unique_pages and selected_pages:
         unique_pages = [selected_pages[0]]
     preview_pages = attach_previews(unique_pages, context=context)
 
+    logger.info(
+        "Pipeline finished for job=%s: sampled_frames=%s, segments=%s, selected_pages=%s, deduped_pages=%s",
+        job_id,
+        len(sampled_frames),
+        len(segments),
+        len(selected_pages),
+        len(preview_pages),
+    )
+
     notes = [
         f"Processed video at {metadata.fps:.2f} fps, {metadata.width}x{metadata.height}, duration {metadata.duration_seconds:.1f}s.",
         f"Sampled {len(sampled_frames)} frames and detected {len(segments)} stable page segments.",
-        f"Selected {len(selected_pages)} representative frames and kept {len(preview_pages)} pages after deduplication.",
+        f"Selected {len(selected_pages)} representative frames, removed {len(selected_pages) - len(preview_pages)} duplicates, and kept {len(preview_pages)} pages after deduplication.",
     ]
 
     return PipelineResult(
