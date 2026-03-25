@@ -1,0 +1,261 @@
+:root {
+  color-scheme: light;
+  font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+  color: #14213d;
+  background:
+    radial-gradient(circle at top, rgba(253, 224, 71, 0.3), transparent 28%),
+    linear-gradient(180deg, #fff8ea 0%, #eef3ff 100%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.app-shell {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 32px 20px 48px;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: 1.7fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.hero__content,
+.hero__panel,
+.section-card {
+  border: 1px solid rgba(20, 33, 61, 0.1);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 18px 60px rgba(20, 33, 61, 0.08);
+}
+
+.hero__content {
+  padding: 36px;
+}
+
+.hero__panel {
+  padding: 28px;
+}
+
+.hero__eyebrow,
+.section-eyebrow,
+.panel-label {
+  margin: 0 0 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.76rem;
+  color: #6b7280;
+}
+
+.hero h1,
+.section-card h2,
+.review-summary h3,
+.page-card h4 {
+  margin: 0;
+}
+
+.hero h1 {
+  font-size: clamp(2.4rem, 5vw, 4.6rem);
+  line-height: 0.98;
+  max-width: 11ch;
+}
+
+.hero__copy {
+  max-width: 62ch;
+  font-size: 1.02rem;
+  line-height: 1.7;
+  margin: 18px 0 0;
+}
+
+.hero__panel ol,
+.feature-list,
+.stage-list {
+  margin: 16px 0 0;
+  padding-left: 18px;
+}
+
+.main-grid {
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  gap: 24px;
+}
+
+.main-grid__left,
+.main-grid__right {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.section-card {
+  padding: 24px;
+}
+
+.section-body {
+  margin-top: 16px;
+}
+
+.upload-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.upload-dropzone {
+  display: block;
+  border: 1.5px dashed #b6c2da;
+  border-radius: 18px;
+  padding: 24px;
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.12), rgba(59, 130, 246, 0.08));
+}
+
+.upload-dropzone input {
+  display: block;
+  margin-top: 12px;
+}
+
+.primary-button,
+.job-tile,
+.page-card__actions button {
+  border: none;
+  border-radius: 14px;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.primary-button {
+  padding: 14px 18px;
+  background: #14213d;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.job-list,
+.page-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.job-tile {
+  padding: 14px 16px;
+  text-align: left;
+  background: #f7f9ff;
+  border: 1px solid transparent;
+}
+
+.job-tile.active {
+  border-color: #14213d;
+  background: #eef4ff;
+}
+
+.job-tile__title,
+.job-tile__meta {
+  display: block;
+}
+
+.job-tile__title {
+  font-weight: 600;
+}
+
+.job-tile__meta,
+.muted {
+  color: #667085;
+}
+
+.review-board {
+  display: grid;
+  gap: 20px;
+}
+
+.stage-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.page-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.page-card {
+  border: 1px solid rgba(20, 33, 61, 0.08);
+  border-radius: 20px;
+  background: #fcfdff;
+  padding: 14px;
+}
+
+.page-card__preview {
+  aspect-ratio: 3 / 4;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #edf2ff 0%, #ffffff 100%);
+  display: grid;
+  place-items: center;
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+
+.page-placeholder {
+  width: 72%;
+  height: 82%;
+  border-radius: 12px;
+  border: 1px solid rgba(20, 33, 61, 0.12);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 12px;
+  color: #344054;
+}
+
+.page-card__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.page-card__actions button {
+  padding: 10px 12px;
+  background: #edf2ff;
+}
+
+.error-text {
+  color: #b42318;
+}
+
+.selected-file {
+  color: #101828;
+  font-weight: 600;
+}
+
+.primary-button:hover,
+.job-tile:hover,
+.page-card__actions button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(20, 33, 61, 0.12);
+}
+
+@media (max-width: 980px) {
+  .hero,
+  .main-grid {
+    grid-template-columns: 1fr;
+  }
+}
