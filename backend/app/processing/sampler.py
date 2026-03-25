@@ -1,13 +1,73 @@
-from app.processing.types import SampledFrame
+from __future__ import annotations
+
+from pathlib import Path
+
+import cv2
+
+from app.processing.scoring import compute_frame_quality
+from app.processing.types import PipelineContext, SampledFrame, VideoMetadata
 
 
-def sample_frames(filename: str, fps: float) -> list[SampledFrame]:
-    """Placeholder sampler for initial scaffold wiring."""
-    return [
-        SampledFrame(timestamp=0.0, frame_index=0, sharpness_score=0.62),
-        SampledFrame(timestamp=1.2, frame_index=36, sharpness_score=0.79),
-        SampledFrame(timestamp=2.5, frame_index=75, sharpness_score=0.66),
-        SampledFrame(timestamp=4.0, frame_index=120, sharpness_score=0.84),
-        SampledFrame(timestamp=5.3, frame_index=159, sharpness_score=0.71),
-        SampledFrame(timestamp=6.8, frame_index=204, sharpness_score=0.88),
-    ]
+def load_video_metadata(video_path: str) -> VideoMetadata:
+    capture = cv2.VideoCapture(video_path)
+    if not capture.isOpened():
+        raise ValueError(f"Could not open video file: {video_path}")
+
+    fps = capture.get(cv2.CAP_PROP_FPS) or 0.0
+    frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+    height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+    capture.release()
+
+    if fps <= 0 or frame_count <= 0:
+        raise ValueError("Video metadata could not be determined.")
+
+    return VideoMetadata(
+        fps=fps,
+        frame_count=frame_count,
+        width=width,
+        height=height,
+        duration_seconds=frame_count / fps,
+    )
+
+
+def sample_frames(
+    context: PipelineContext,
+    metadata: VideoMetadata,
+    sample_fps: float,
+) -> list[SampledFrame]:
+    capture = cv2.VideoCapture(context.upload_path)
+    if not capture.isOpened():
+        raise ValueError(f"Could not read uploaded video: {context.upload_path}")
+
+    effective_sample_fps = max(sample_fps, 0.25)
+    frame_interval = max(int(round(metadata.fps / effective_sample_fps)), 1)
+    sampled_frames: list[SampledFrame] = []
+    frame_index = 0
+
+    while True:
+        success, frame = capture.read()
+        if not success:
+            break
+
+        if frame_index % frame_interval == 0:
+            quality = compute_frame_quality(frame)
+            sampled_frames.append(
+                SampledFrame(
+                    timestamp=frame_index / metadata.fps,
+                    frame_index=frame_index,
+                    image=frame,
+                    quality=quality,
+                )
+            )
+        frame_index += 1
+
+    capture.release()
+
+    if not sampled_frames:
+        raise ValueError(
+            f"No frames were sampled from {Path(context.upload_path).name}. "
+            "The video may be unreadable or too short."
+        )
+
+    return sampled_frames

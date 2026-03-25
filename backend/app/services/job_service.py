@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -10,6 +9,7 @@ from fastapi import UploadFile
 from app.core.settings import settings
 from app.models.job import ExportArtifact, Job, Page, Progress, Stage
 from app.processing.pipeline import PIPELINE_STAGES, build_export, run_reconstruction_pipeline
+from app.processing.types import FrameQuality, SampledFrame, SelectedPage
 from app.schemas.job import (
     ExportResponse,
     JobResponse,
@@ -21,7 +21,7 @@ from app.schemas.job import (
 )
 
 STAGE_DURATION_SECONDS = 1.2
-EXPORT_DURATION_SECONDS = 2.0
+EXPORT_DURATION_SECONDS = 1.2
 
 
 class JobService:
@@ -30,8 +30,10 @@ class JobService:
         self._storage_root = Path(settings.storage_path)
         self._uploads_root = self._storage_root / "uploads"
         self._exports_root = self._storage_root / "exports"
+        self._jobs_root = self._storage_root / "jobs"
         self._uploads_root.mkdir(parents=True, exist_ok=True)
         self._exports_root.mkdir(parents=True, exist_ok=True)
+        self._jobs_root.mkdir(parents=True, exist_ok=True)
 
     def list_jobs(self) -> list[JobResponse]:
         self._sync_jobs()
@@ -185,7 +187,16 @@ class JobService:
 
         total_processing_time = 0.3 + (len(job.stages) * STAGE_DURATION_SECONDS)
         if elapsed >= total_processing_time:
-            self._materialize_pipeline_output(job)
+            try:
+                self._materialize_pipeline_output(job)
+            except Exception as exc:
+                job.status = "failed"
+                job.progress = Progress(percent=100, message="Pipeline failed.")
+                job.notes.append(f"Pipeline error: {exc}")
+                job.updated_at = datetime.now(timezone.utc)
+                self._sync_export(job)
+                return
+
             for index, stage in enumerate(job.stages):
                 stage.status = "complete"
                 stage.progress_percent = 100
@@ -195,7 +206,7 @@ class JobService:
                     stage.completed_at = stage.started_at + timedelta(seconds=STAGE_DURATION_SECONDS)
 
             job.status = "ready"
-            job.completed_at = job.started_at + timedelta(seconds=len(job.stages) * STAGE_DURATION_SECONDS)
+            job.completed_at = datetime.now(timezone.utc)
             job.current_stage_key = job.stages[-1].key
             job.progress = Progress(percent=100, message="Pages are ready for review.")
 
@@ -204,10 +215,12 @@ class JobService:
     def _materialize_pipeline_output(self, job: Job) -> None:
         if job.pages:
             return
+        if not job.upload_path:
+            raise ValueError("Uploaded video path is missing.")
 
-        pipeline_result = run_reconstruction_pipeline(filename=job.filename)
+        pipeline_result = run_reconstruction_pipeline(job_id=job.id, upload_path=job.upload_path)
         job.notes = [
-            "Pipeline completed with placeholder extraction logic behind real job and page contracts.",
+            "Pipeline completed with real video sampling, stable segment detection, frame scoring, preview writing, and deduplication.",
             "Pages can now be reviewed, reordered, rotated, deleted, and exported through backend-backed state.",
             *pipeline_result.notes,
         ]
@@ -218,16 +231,19 @@ class JobService:
                 order_index=index,
                 page_number=index + 1,
                 preview_label=page.label,
-                thumbnail_url=self._build_page_data_url(job.filename, index + 1, page.selected_frame.sharpness_score),
-                image_url=self._build_page_data_url(job.filename, index + 1, page.selected_frame.sharpness_score),
-                sharpness_score=page.selected_frame.sharpness_score,
-                segment_start=max(0.0, page.selected_frame.timestamp - 0.3),
-                segment_end=page.selected_frame.timestamp + 1.0,
+                thumbnail_url=page.preview_url,
+                image_url=page.image_url,
+                sharpness_score=page.selected_frame.quality.score,
+                segment_start=page.segment_start,
+                segment_end=page.segment_end,
                 source_frame_index=page.selected_frame.frame_index,
                 source_timestamp=page.selected_frame.timestamp,
             )
             for index, page in enumerate(pipeline_result.pages)
         ]
+        for selected_page in pipeline_result.pages:
+            for note in selected_page.notes:
+                job.notes.append(f"{selected_page.label}: {note}")
 
     def _sync_export(self, job: Job) -> None:
         export = job.export
@@ -240,93 +256,68 @@ class JobService:
             return
 
         active_pages = [page for page in sorted(job.pages, key=lambda item: item.order_index) if not page.deleted]
+        if not active_pages:
+            export.status = "failed"
+            export.error = "No active pages available for export."
+            job.updated_at = datetime.now(timezone.utc)
+            return
+
+        selected_pages = [self._to_selected_page(page) for page in active_pages]
         artifact = build_export(
             job_id=job.id,
-            pages=run_reconstruction_pipeline(job.filename).pages[: len(active_pages)],
+            pages=selected_pages,
+            output_dir=str(self._exports_root),
         )
-        file_path = self._exports_root / artifact.filename
-        file_path.write_bytes(self._build_minimal_pdf(job.filename, active_pages))
 
         export.status = "ready"
         export.progress_percent = 100
         export.filename = artifact.filename
-        export.download_url = f"{settings.public_artifact_base_url}/{artifact.filename}"
+        export.download_url = f"{settings.public_artifact_base_url}/exports/{artifact.filename}"
         export.completed_at = datetime.now(timezone.utc)
         export.error = None
         job.updated_at = export.completed_at
 
-    def _build_page_data_url(self, filename: str, page_number: int, score: float) -> str:
-        safe_title = self._escape_svg(filename)
-        svg = f"""
-<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1200" viewBox="0 0 900 1200">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#eef4ff"/>
-      <stop offset="100%" stop-color="#ffffff"/>
-    </linearGradient>
-  </defs>
-  <rect width="900" height="1200" rx="44" fill="url(#bg)"/>
-  <rect x="78" y="88" width="744" height="1024" rx="28" fill="#ffffff" stroke="#d9e2f0"/>
-  <text x="128" y="180" fill="#173f8a" font-size="34" font-family="Arial, sans-serif">Vid2PDF Preview</text>
-  <text x="128" y="236" fill="#10213b" font-size="50" font-weight="700" font-family="Arial, sans-serif">Page {page_number}</text>
-  <text x="128" y="292" fill="#5d6b82" font-size="24" font-family="Arial, sans-serif">{safe_title}</text>
-  <text x="128" y="372" fill="#10213b" font-size="26" font-family="Arial, sans-serif">Sharpness score</text>
-  <text x="128" y="418" fill="#173f8a" font-size="40" font-weight="700" font-family="Arial, sans-serif">{score:.2f}</text>
-  <rect x="128" y="478" width="520" height="16" rx="8" fill="#e8f0ff"/>
-  <rect x="128" y="478" width="{max(120, int(score * 520))}" height="16" rx="8" fill="#173f8a"/>
-  <rect x="128" y="560" width="562" height="20" rx="10" fill="#eff3f8"/>
-  <rect x="128" y="610" width="602" height="20" rx="10" fill="#eff3f8"/>
-  <rect x="128" y="660" width="546" height="20" rx="10" fill="#eff3f8"/>
-  <rect x="128" y="710" width="500" height="20" rx="10" fill="#eff3f8"/>
-</svg>
-""".strip()
-        encoded = base64.b64encode(svg.encode("utf-8")).decode("ascii")
-        return f"data:image/svg+xml;base64,{encoded}"
+    def _to_selected_page(self, page: Page) -> SelectedPage:
+        if not page.image_url or not page.thumbnail_url:
+            raise ValueError("Page image artifacts are missing.")
 
-    def _build_minimal_pdf(self, filename: str, active_pages: list[Page]) -> bytes:
-        summary = [
-            "BT",
-            "/F1 18 Tf",
-            "72 740 Td",
-            f"({self._escape_pdf(filename)} - export summary) Tj",
-            "0 -28 Td",
-            f"({len(active_pages)} active pages exported) Tj",
-        ]
-        for index, page in enumerate(active_pages, start=1):
-            summary.extend(
-                [
-                    "0 -24 Td",
-                    f"(Page {index}: score {page.sharpness_score:.2f}, rotation {page.rotation}) Tj",
-                ]
-            )
-        summary.append("ET")
-        stream = "\n".join(summary)
-        objects = [
-            "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n",
-            "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n",
-            "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj\n",
-            f"4 0 obj << /Length {len(stream.encode('utf-8'))} >> stream\n{stream}\nendstream\nendobj\n",
-            "5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n",
-        ]
-
-        buffer = bytearray(b"%PDF-1.4\n")
-        offsets = [0]
-        for obj in objects:
-            offsets.append(len(buffer))
-            buffer.extend(obj.encode("utf-8"))
-
-        xref_position = len(buffer)
-        buffer.extend(f"xref\n0 {len(offsets)}\n".encode("utf-8"))
-        buffer.extend(b"0000000000 65535 f \n")
-        for offset in offsets[1:]:
-            buffer.extend(f"{offset:010d} 00000 n \n".encode("utf-8"))
-        buffer.extend(
-            (
-                f"trailer << /Root 1 0 R /Size {len(offsets)} >>\n"
-                f"startxref\n{xref_position}\n%%EOF"
-            ).encode("utf-8")
+        image_path = self._resolve_storage_path(page.image_url)
+        thumbnail_path = self._resolve_storage_path(page.thumbnail_url)
+        quality = FrameQuality(
+            sharpness=page.sharpness_score,
+            brightness=0.0,
+            contrast=0.0,
+            edge_density=0.0,
+            score=page.sharpness_score,
+            perceptual_hash="0",
         )
-        return bytes(buffer)
+        sampled_frame = SampledFrame(
+            timestamp=page.source_timestamp,
+            frame_index=page.source_frame_index,
+            image=None,  # type: ignore[arg-type]
+            quality=quality,
+        )
+        return SelectedPage(
+            page_id=page.id,
+            page_number=page.page_number,
+            label=page.preview_label,
+            source_segment_id=f"export-{page.id}",
+            segment_start=page.segment_start,
+            segment_end=page.segment_end,
+            selected_frame=sampled_frame,
+            image_path=str(image_path),
+            thumbnail_path=str(thumbnail_path),
+            rotation=page.rotation,
+            preview_url=page.thumbnail_url,
+            image_url=page.image_url,
+        )
+
+    def _resolve_storage_path(self, artifact_url: str) -> Path:
+        prefix = f"{settings.public_artifact_base_url}/"
+        if not artifact_url.startswith(prefix):
+            raise ValueError(f"Unexpected artifact URL: {artifact_url}")
+        relative_path = artifact_url.removeprefix(prefix)
+        return self._storage_root / relative_path
 
     def _to_response(self, job: Job) -> JobResponse:
         pages = sorted(job.pages, key=lambda page: page.order_index)
@@ -388,16 +379,6 @@ class JobService:
             completedAt=export.completed_at,
             error=export.error,
         )
-
-    def _escape_svg(self, value: str) -> str:
-        return (
-            value.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-        )
-
-    def _escape_pdf(self, value: str) -> str:
-        return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
 
 job_service = JobService()

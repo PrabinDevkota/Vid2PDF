@@ -26,4 +26,4 @@ def health_check() -> dict[str, str]:
 
 
 app.include_router(router, prefix="/api")
-app.mount("/artifacts", StaticFiles(directory=f"{settings.storage_path}/exports"), name="artifacts")
+app.mount("/artifacts", StaticFiles(directory=settings.storage_path), name="artifacts")
