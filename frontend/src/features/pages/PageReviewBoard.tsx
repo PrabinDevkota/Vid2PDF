@@ -99,8 +99,8 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
   return (
     <SectionCard
       eyebrow="Review"
-      title="Page review board"
-      subtitle="Inspect extracted pages, adjust order, rotate misaligned captures, and prepare the final export."
+      title="Review board"
+      subtitle="Inspect extracted pages, make lightweight corrections, and export the final document."
       actions={
         job ? (
           <div className="review-actions">
@@ -130,12 +130,14 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
             <div className="review-summary-card">
               <span className="review-summary-card__eyebrow">Current session</span>
               <h3>{job.filename}</h3>
-              <p className="muted">
-                {job.processingMode === "camera"
-                  ? "Camera / physical-page mode"
-                  : "Screen-recording mode"}
-              </p>
-              <p className="muted">{job.progress.message}</p>
+              <div className="review-summary-card__meta">
+                <p className="muted">
+                  {job.processingMode === "camera"
+                    ? "Camera / physical-page mode"
+                    : "Screen-recording mode"}
+                </p>
+                <p className="muted">{job.progress.message}</p>
+              </div>
               <div className="progress-block">
                 <div className="progress-block__track">
                   <div

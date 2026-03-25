@@ -45,8 +45,8 @@ export function UploadPanel({ onJobCreated }: UploadPanelProps) {
   return (
     <SectionCard
       eyebrow="Input"
-      title="Upload a source recording"
-      subtitle="Start with one screen recording or one camera video of a document session."
+      title="Create a reconstruction session"
+      subtitle="Upload one recording, choose the source type, and let the pipeline prepare reviewable pages."
     >
       <form className="upload-form" onSubmit={handleSubmit}>
         <div className="mode-selector">
@@ -66,8 +66,8 @@ export function UploadPanel({ onJobCreated }: UploadPanelProps) {
           </button>
         </div>
         <label className="upload-dropzone">
-          <span className="upload-dropzone__eyebrow">Drag in a file or browse</span>
-          <strong>Choose one document-viewing video</strong>
+          <span className="upload-dropzone__eyebrow">Video input</span>
+          <strong>Choose one document-viewing recording</strong>
           <p>
             {processingMode === "camera"
               ? "Best for handheld recordings of books, reports, or worksheets with clear pauses after each page turn."
@@ -84,9 +84,9 @@ export function UploadPanel({ onJobCreated }: UploadPanelProps) {
           />
         </label>
         <div className="upload-notes">
-          <span>One video in</span>
-          <span>Stable pages detected</span>
-          <span>Final PDF out</span>
+          <span>One source video</span>
+          <span>Page segments detected</span>
+          <span>PDF export ready</span>
         </div>
         {selectedFile ? (
           <div className="selected-file">

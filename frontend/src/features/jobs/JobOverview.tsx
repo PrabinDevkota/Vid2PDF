@@ -17,8 +17,8 @@ export function JobOverview({
   return (
     <SectionCard
       eyebrow="Sessions"
-      title="Processing sessions"
-      subtitle="Each upload creates one reconstruction session with its own extracted page set."
+      title="Sessions"
+      subtitle="Each upload creates its own backend-backed reconstruction run and review set."
     >
       {isLoading ? (
         <div className="empty-state">
@@ -43,12 +43,12 @@ export function JobOverview({
                 <span className="job-tile__title">{job.filename}</span>
                 <span className={`job-status job-status--${job.status}`}>{job.status}</span>
               </div>
-              <span className="job-tile__meta">
-                {job.pages.length} extracted pages
-              </span>
-              <span className="job-tile__meta">
-                Mode: {job.processingMode === "camera" ? "Camera / physical pages" : "Screen recording"}
-              </span>
+              <div className="job-tile__meta-row">
+                <span className="job-tile__meta">{job.pages.length} extracted pages</span>
+                <span className="job-tile__meta">
+                  {job.processingMode === "camera" ? "Camera / physical pages" : "Screen recording"}
+                </span>
+              </div>
               <span className="job-tile__meta">
                 Created {new Date(job.createdAt).toLocaleDateString()}
               </span>

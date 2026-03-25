@@ -136,11 +136,18 @@ export default function App() {
     <div className="app-shell">
       <header className="hero">
         <div className="hero__content">
-          <div className="hero-badge-row">
-            <p className="hero__eyebrow">Vid2PDF</p>
-            <span className="hero-badge">Screen recordings to polished PDFs</span>
+          <div className="hero-topbar">
+            <div className="hero-badge-row">
+              <p className="hero__eyebrow">Vid2PDF</p>
+              <span className="hero-badge">Document reconstruction workspace</span>
+            </div>
+            <div className="hero-mini-stats">
+              <span>{jobs.length} sessions</span>
+              <span>{totalPages} pages</span>
+              <span>{readyJobs} ready</span>
+            </div>
           </div>
-          <h1>Reconstruct clean PDFs from page-by-page screen recordings.</h1>
+          <h1>Turn document-viewing videos into reviewable, export-ready PDFs.</h1>
           <p className="hero__copy">
             Built for reports, ebooks, manuals, and slide decks viewed page by
             page. Vid2PDF focuses on stable segments, best-frame selection, and
@@ -163,8 +170,8 @@ export default function App() {
         </div>
         <div className="hero__panel">
           <div className="panel-topline">
-            <span className="panel-label">Reconstruction flow</span>
-            <span className="panel-tag">v1 workspace</span>
+            <span className="panel-label">Workflow</span>
+            <span className="panel-tag">Current pipeline</span>
           </div>
           <div className="pipeline-list">
             {pipelineSteps.map((step, index) => (
@@ -193,8 +200,8 @@ export default function App() {
         <div className="main-grid__right">
           <SectionCard
             eyebrow="Product"
-            title="A tighter workflow than basic video-to-PDF conversion"
-            subtitle="The interface is organized around the actual reconstruction job: upload, inspect, refine, and export."
+            title="Built around reconstruction, not screenshot stitching"
+            subtitle="The workspace follows the actual product flow: ingest a recording, inspect extracted pages, refine the result, and export the final PDF."
           >
             <div className="feature-grid">
               <article className="feature-card">
