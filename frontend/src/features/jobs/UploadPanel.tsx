@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import type { ProcessingJob } from "../../types";
+import type { ProcessingJob, ProcessingMode } from "../../types";
 import { uploadVideo } from "../../lib/api";
 import { SectionCard } from "../../components/SectionCard";
 
@@ -9,6 +9,7 @@ interface UploadPanelProps {
 
 export function UploadPanel({ onJobCreated }: UploadPanelProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [processingMode, setProcessingMode] = useState<ProcessingMode>("screen");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -24,7 +25,7 @@ export function UploadPanel({ onJobCreated }: UploadPanelProps) {
     setError(null);
 
     try {
-      const job = await uploadVideo(selectedFile);
+      const job = await uploadVideo(selectedFile, processingMode);
       onJobCreated(job);
       setSelectedFile(null);
       if (inputRef.current) {
@@ -45,15 +46,32 @@ export function UploadPanel({ onJobCreated }: UploadPanelProps) {
     <SectionCard
       eyebrow="Input"
       title="Upload a source recording"
-      subtitle="Start with one screen recording of a document, report, ebook, or slide deck."
+      subtitle="Start with one screen recording or one camera video of a document session."
     >
       <form className="upload-form" onSubmit={handleSubmit}>
+        <div className="mode-selector">
+          <button
+            className={`mode-pill ${processingMode === "screen" ? "active" : ""}`}
+            onClick={() => setProcessingMode("screen")}
+            type="button"
+          >
+            Screen recording
+          </button>
+          <button
+            className={`mode-pill ${processingMode === "camera" ? "active" : ""}`}
+            onClick={() => setProcessingMode("camera")}
+            type="button"
+          >
+            Camera / physical pages
+          </button>
+        </div>
         <label className="upload-dropzone">
           <span className="upload-dropzone__eyebrow">Drag in a file or browse</span>
           <strong>Choose one document-viewing video</strong>
           <p>
-            Best for full-screen page viewing with clear pauses between page
-            changes.
+            {processingMode === "camera"
+              ? "Best for handheld recordings of books, reports, or worksheets with clear pauses after each page turn."
+              : "Best for full-screen page viewing with clear pauses between page changes."}
           </p>
           <input
             accept="video/*"
@@ -87,7 +105,9 @@ export function UploadPanel({ onJobCreated }: UploadPanelProps) {
             {isSubmitting ? "Preparing session..." : "Start reconstruction"}
           </button>
           <span className="upload-actions__hint">
-            The backend now creates a real job record, tracks pipeline progress, and exposes extracted pages for review.
+            {processingMode === "camera"
+              ? "Camera mode adds document-boundary detection, perspective correction, transition rejection, and occlusion penalties."
+              : "Screen mode keeps the faster digital-document extraction path for page-by-page screen recordings."}
           </span>
         </div>
       </form>

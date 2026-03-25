@@ -28,27 +28,51 @@ class PipelineResult:
     pages: list[SelectedPage]
     video_metadata: VideoMetadata
     context: PipelineContext
+def run_reconstruction_pipeline(
+    job_id: str,
+    upload_path: str,
+    processing_mode: str,
+) -> PipelineResult:
+    context = build_pipeline_context(
+        job_id=job_id,
+        upload_path=upload_path,
+        processing_mode=processing_mode,
+    )
+    if context.processing_mode == "camera":
+        sample_fps = settings.camera_sample_fps
+        min_seconds = settings.camera_stable_segment_min_seconds
+        max_change_ratio = settings.camera_stable_segment_max_change_ratio
+        hash_distance_threshold = settings.camera_stable_segment_hash_distance_threshold
+        mean_diff_threshold = settings.camera_stable_segment_mean_diff_threshold
+        dedupe_threshold = settings.camera_dedupe_max_hash_distance
+    else:
+        sample_fps = settings.screen_sample_fps
+        min_seconds = settings.screen_stable_segment_min_seconds
+        max_change_ratio = settings.screen_stable_segment_max_change_ratio
+        hash_distance_threshold = settings.screen_stable_segment_hash_distance_threshold
+        mean_diff_threshold = settings.screen_stable_segment_mean_diff_threshold
+        dedupe_threshold = settings.screen_dedupe_max_hash_distance
 
-
-def run_reconstruction_pipeline(job_id: str, upload_path: str) -> PipelineResult:
-    context = build_pipeline_context(job_id=job_id, upload_path=upload_path)
     metadata = load_video_metadata(upload_path)
     sampled_frames = sample_frames(
         context=context,
         metadata=metadata,
-        sample_fps=settings.default_sample_fps,
+        sample_fps=sample_fps,
     )
     segments = detect_stable_segments(
         frames=sampled_frames,
-        min_seconds=settings.stable_segment_min_seconds,
-        max_change_ratio=settings.stable_segment_max_change_ratio,
-        hash_distance_threshold=settings.stable_segment_hash_distance_threshold,
-        mean_diff_threshold=settings.stable_segment_mean_diff_threshold,
+        min_seconds=min_seconds,
+        max_change_ratio=max_change_ratio,
+        hash_distance_threshold=hash_distance_threshold,
+        mean_diff_threshold=mean_diff_threshold,
     )
-    selected_pages = select_best_frames(segments)
+    selected_pages = select_best_frames(
+        segments,
+        processing_mode=context.processing_mode,
+    )
     unique_pages = remove_duplicates(
         selected_pages,
-        max_hamming_distance=settings.dedupe_max_hash_distance,
+        max_hamming_distance=dedupe_threshold,
     )
     if not unique_pages and selected_pages:
         unique_pages = [selected_pages[0]]
@@ -64,6 +88,7 @@ def run_reconstruction_pipeline(job_id: str, upload_path: str) -> PipelineResult
     )
 
     notes = [
+        f"Processing mode: {context.processing_mode}.",
         f"Processed video at {metadata.fps:.2f} fps, {metadata.width}x{metadata.height}, duration {metadata.duration_seconds:.1f}s.",
         f"Sampled {len(sampled_frames)} frames and detected {len(segments)} stable page segments.",
         f"Selected {len(selected_pages)} representative frames, removed {len(selected_pages) - len(preview_pages)} duplicates, and kept {len(preview_pages)} pages after deduplication.",

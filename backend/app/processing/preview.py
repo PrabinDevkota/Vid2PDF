@@ -4,6 +4,7 @@ from pathlib import Path
 
 import cv2
 
+from app.processing.document import normalize_final_page
 from app.processing.types import PipelineContext, SelectedPage
 
 
@@ -22,8 +23,14 @@ def attach_previews(
         image_path = page_dir / image_filename
         thumbnail_path = thumbnail_dir / thumb_filename
 
-        cv2.imwrite(str(image_path), page.selected_frame.image)
-        thumbnail_image = _build_thumbnail(page.selected_frame.image)
+        output_image = page.selected_frame.image
+        if output_image is None:
+            continue
+        if context.processing_mode == "camera":
+            output_image = normalize_final_page(output_image)
+
+        cv2.imwrite(str(image_path), output_image)
+        thumbnail_image = _build_thumbnail(output_image)
         cv2.imwrite(str(thumbnail_path), thumbnail_image, [int(cv2.IMWRITE_JPEG_QUALITY), 88])
 
         page.image_path = str(image_path)

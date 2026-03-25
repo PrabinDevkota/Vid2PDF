@@ -2,6 +2,7 @@ export type JobStatus = "queued" | "processing" | "ready" | "failed";
 export type StageStatus = "pending" | "processing" | "complete" | "failed";
 export type PageStatus = "active" | "deleted";
 export type ExportStatus = "idle" | "processing" | "ready" | "failed";
+export type ProcessingMode = "screen" | "camera";
 
 export interface ProgressState {
   percent: number;
@@ -48,6 +49,7 @@ export interface ExportState {
 export interface ProcessingJob {
   id: string;
   filename: string;
+  processingMode: ProcessingMode;
   status: JobStatus;
   createdAt: string;
   updatedAt: string;

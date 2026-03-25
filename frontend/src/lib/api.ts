@@ -1,4 +1,4 @@
-import type { ProcessingJob } from "../types";
+import type { ProcessingJob, ProcessingMode } from "../types";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ||
@@ -26,9 +26,13 @@ export async function fetchJob(jobId: string): Promise<ProcessingJob> {
   return readJson<ProcessingJob>(response, "Failed to load job");
 }
 
-export async function uploadVideo(file: File): Promise<ProcessingJob> {
+export async function uploadVideo(
+  file: File,
+  processingMode: ProcessingMode,
+): Promise<ProcessingJob> {
   const formData = new FormData();
   formData.append("file", file);
+  formData.append("processing_mode", processingMode);
 
   const response = await fetch(`${API_BASE_URL}/api/jobs/upload`, {
     method: "POST",

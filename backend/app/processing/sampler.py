@@ -4,6 +4,7 @@ from pathlib import Path
 
 import cv2
 
+from app.processing.document import detect_document_region
 from app.processing.scoring import compute_frame_quality
 from app.processing.types import PipelineContext, SampledFrame, VideoMetadata
 
@@ -44,6 +45,7 @@ def sample_frames(
     frame_interval = max(int(round(metadata.fps / effective_sample_fps)), 1)
     sampled_frames: list[SampledFrame] = []
     frame_index = 0
+    previous_detection = None
 
     while True:
         success, frame = capture.read()
@@ -51,15 +53,38 @@ def sample_frames(
             break
 
         if frame_index % frame_interval == 0:
-            quality = compute_frame_quality(frame)
+            if context.processing_mode == "camera":
+                detection = detect_document_region(frame)
+                processed_frame = detection.corrected_image
+                transition_penalty = (
+                    (0.25 if not detection.found else 0.0)
+                    + max(0.0, 0.25 - detection.page_coverage)
+                    + max(0.0, 0.2 - detection.rectangularity)
+                    + (detection.occlusion_ratio * 0.9)
+                )
+                if previous_detection is not None:
+                    transition_penalty += _camera_stability_penalty(previous_detection, detection)
+            else:
+                detection = None
+                processed_frame = frame
+                transition_penalty = 0.0
+
+            quality = compute_frame_quality(
+                processed_frame,
+                mode=context.processing_mode,
+                detection=detection,
+                transition_penalty=transition_penalty,
+            )
             sampled_frames.append(
                 SampledFrame(
                     timestamp=frame_index / metadata.fps,
                     frame_index=frame_index,
-                    image=frame,
+                    image=processed_frame,
                     quality=quality,
+                    detection=detection,
                 )
             )
+            previous_detection = detection
         frame_index += 1
 
     capture.release()
@@ -71,3 +96,19 @@ def sample_frames(
         )
 
     return sampled_frames
+
+
+def _camera_stability_penalty(previous_detection, current_detection) -> float:
+    if not previous_detection.found or not current_detection.found:
+        return 0.18
+
+    coverage_delta = abs(current_detection.page_coverage - previous_detection.page_coverage)
+    rectangularity_delta = abs(current_detection.rectangularity - previous_detection.rectangularity)
+    perspective_delta = abs(
+        current_detection.perspective_score - previous_detection.perspective_score
+    )
+    return (
+        min(coverage_delta * 1.8, 0.28)
+        + min(rectangularity_delta * 0.9, 0.16)
+        + min(perspective_delta * 0.75, 0.14)
+    )

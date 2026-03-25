@@ -258,6 +258,27 @@ button {
   gap: 16px;
 }
 
+.mode-selector {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.mode-pill {
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+  color: var(--text-soft);
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.mode-pill.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: rgba(23, 63, 138, 0.18);
+}
+
 .upload-dropzone {
   display: grid;
   gap: 10px;

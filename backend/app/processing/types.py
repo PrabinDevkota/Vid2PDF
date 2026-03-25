@@ -1,6 +1,9 @@
 from dataclasses import dataclass, field
+from typing import Literal
 
 import numpy as np
+
+ProcessingMode = Literal["screen", "camera"]
 
 
 @dataclass
@@ -13,11 +16,27 @@ class VideoMetadata:
 
 
 @dataclass
+class DocumentDetection:
+    found: bool
+    contour: np.ndarray | None
+    corrected_image: np.ndarray
+    page_coverage: float
+    rectangularity: float
+    occlusion_ratio: float
+    perspective_score: float
+
+
+@dataclass
 class FrameQuality:
     sharpness: float
     brightness: float
     contrast: float
     edge_density: float
+    page_coverage: float
+    rectangularity: float
+    occlusion_ratio: float
+    transition_penalty: float
+    readability_score: float
     score: float
     perceptual_hash: str
 
@@ -28,6 +47,7 @@ class SampledFrame:
     frame_index: int
     image: np.ndarray | None
     quality: FrameQuality
+    detection: DocumentDetection | None = None
     change_ratio: float = 1.0
 
 
@@ -65,3 +85,4 @@ class PipelineContext:
     page_dir: str
     thumbnail_dir: str
     artifact_base_url: str
+    processing_mode: ProcessingMode

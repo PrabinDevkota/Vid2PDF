@@ -49,6 +49,7 @@ class ExportResponse(BaseModel):
 class JobResponse(BaseModel):
     id: str
     filename: str
+    processingMode: Literal["screen", "camera"]
     status: Literal["queued", "processing", "ready", "failed"]
     createdAt: datetime
     updatedAt: datetime

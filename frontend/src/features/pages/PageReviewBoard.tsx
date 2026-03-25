@@ -12,6 +12,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
   const visiblePages = job?.pages.filter((page) => !page.deleted) ?? [];
+  const exportDownloadUrl = resolveArtifactUrl(job?.export.downloadUrl ?? null);
 
   async function handleRotate(pageId: string, rotation: number) {
     if (!job) {
@@ -129,6 +130,11 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
             <div className="review-summary-card">
               <span className="review-summary-card__eyebrow">Current session</span>
               <h3>{job.filename}</h3>
+              <p className="muted">
+                {job.processingMode === "camera"
+                  ? "Camera / physical-page mode"
+                  : "Screen-recording mode"}
+              </p>
               <p className="muted">{job.progress.message}</p>
               <div className="progress-block">
                 <div className="progress-block__track">
@@ -178,10 +184,10 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                     ? `${job.export.progressPercent}% complete. Preparing the final PDF artifact.`
                     : job.export.error ?? "Export could not be completed."}
               </span>
-              {job.export.downloadUrl ? (
+              {exportDownloadUrl ? (
                 <a
                   className="download-link"
-                  href={resolveArtifactUrl(job.export.downloadUrl)}
+                  href={exportDownloadUrl}
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -211,15 +217,18 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
             </div>
           ) : (
             <div className="page-grid">
-              {visiblePages.map((page, index) => (
+              {visiblePages.map((page, index) => {
+                const thumbnailUrl = resolveArtifactUrl(page.thumbnailUrl);
+
+                return (
                 <article className="page-card" key={page.id}>
                   <div className="page-card__preview">
                     <div className="page-card__preview-tag">Page preview</div>
-                    {resolveArtifactUrl(page.thumbnailUrl) ? (
+                    {thumbnailUrl ? (
                       <img
                         alt={page.previewLabel}
                         className="page-preview-image"
-                        src={resolveArtifactUrl(page.thumbnailUrl) ?? undefined}
+                        src={thumbnailUrl}
                         style={{ transform: `rotate(${page.rotation}deg)` }}
                       />
                     ) : (
@@ -280,7 +289,8 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                     </button>
                   </div>
                 </article>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

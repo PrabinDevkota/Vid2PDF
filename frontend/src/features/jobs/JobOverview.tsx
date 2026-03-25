@@ -47,6 +47,9 @@ export function JobOverview({
                 {job.pages.length} extracted pages
               </span>
               <span className="job-tile__meta">
+                Mode: {job.processingMode === "camera" ? "Camera / physical pages" : "Screen recording"}
+              </span>
+              <span className="job-tile__meta">
                 Created {new Date(job.createdAt).toLocaleDateString()}
               </span>
             </button>

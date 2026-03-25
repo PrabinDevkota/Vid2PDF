@@ -45,7 +45,7 @@ class JobService:
         job = self._jobs.get(job_id)
         return None if job is None else self._to_response(job)
 
-    async def create_job(self, file: UploadFile) -> JobResponse:
+    async def create_job(self, file: UploadFile, processing_mode: str = "screen") -> JobResponse:
         job_id = uuid4().hex[:12]
         created_at = datetime.now(timezone.utc)
         upload_path = self._uploads_root / f"{job_id}-{file.filename or 'upload.bin'}"
@@ -58,6 +58,7 @@ class JobService:
         job = Job(
             id=job_id,
             filename=file.filename or "uploaded-video",
+            processing_mode="camera" if processing_mode == "camera" else "screen",
             status="queued",
             created_at=created_at,
             updated_at=created_at,
@@ -219,9 +220,13 @@ class JobService:
         if not job.upload_path:
             raise ValueError("Uploaded video path is missing.")
 
-        pipeline_result = run_reconstruction_pipeline(job_id=job.id, upload_path=job.upload_path)
+        pipeline_result = run_reconstruction_pipeline(
+            job_id=job.id,
+            upload_path=job.upload_path,
+            processing_mode=job.processing_mode,
+        )
         job.notes = [
-            "Pipeline completed with real video sampling, stable segment detection, frame scoring, preview writing, and deduplication.",
+            f"Pipeline completed in {job.processing_mode} mode with real video sampling, stable segment detection, frame scoring, preview writing, and deduplication.",
             "Pages can now be reviewed, reordered, rotated, deleted, and exported through backend-backed state.",
             *pipeline_result.notes,
         ]
@@ -293,6 +298,11 @@ class JobService:
             brightness=0.0,
             contrast=0.0,
             edge_density=0.0,
+            page_coverage=1.0,
+            rectangularity=1.0,
+            occlusion_ratio=0.0,
+            transition_penalty=0.0,
+            readability_score=page.sharpness_score,
             score=page.sharpness_score,
             perceptual_hash="0",
         )
@@ -329,6 +339,7 @@ class JobService:
         return JobResponse(
             id=job.id,
             filename=job.filename,
+            processingMode=job.processing_mode,
             status=job.status,
             createdAt=job.created_at,
             updatedAt=job.updated_at,

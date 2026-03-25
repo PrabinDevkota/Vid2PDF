@@ -6,6 +6,7 @@ JobStatus = Literal["queued", "processing", "ready", "failed"]
 StageStatus = Literal["pending", "processing", "complete", "failed"]
 PageStatus = Literal["active", "deleted"]
 ExportStatus = Literal["idle", "processing", "ready", "failed"]
+ProcessingMode = Literal["screen", "camera"]
 
 
 @dataclass
@@ -58,6 +59,7 @@ class ExportArtifact:
 class Job:
     id: str
     filename: str
+    processing_mode: ProcessingMode
     status: JobStatus
     created_at: datetime
     updated_at: datetime
