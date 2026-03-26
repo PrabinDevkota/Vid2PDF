@@ -1,0 +1,63 @@
+ So far, the project has moved from a basic scaffold to a working full-stack Vid2PDF app with a real end-to-end flow.
+
+  The frontend was set up with React + TypeScript and then redesigned twice: first to make it feel like a polished product, and later refined into a calmer,
+  lighter workspace-style UI. The app now has a clean upload area, session list, review board, export status handling, and consistent visual styling without
+  changing the core workflow. Upload supports both screen recording and camera / physical pages modes.
+
+  The backend was built with FastAPI and stable response contracts for jobs, progress, stages, pages, and export state. Frontend polling and job syncing
+  were connected to those contracts, so sessions, processing state, page review state, and export state all stay synchronized through the backend. Review
+  actions like rotate, delete, reorder, and export were wired to persist properly.
+
+  The reconstruction pipeline was initially placeholder-based, then replaced with a real CV-based pipeline for screen recordings:
+
+  - video metadata loading
+  - frame sampling
+  - stable segment detection
+  - best-frame selection
+  - duplicate removal
+  - preview image generation
+  - PDF export from real selected images
+
+  After that, the pipeline was extended with a separate camera / physical pages mode for physical-document videos. That mode now includes:
+
+  - document/page contour detection
+  - perspective correction
+  - page-region cropping
+  - transition rejection heuristics
+  - occlusion penalty heuristics
+  - improved camera-oriented frame scoring
+  - normalized page image output before export
+
+  We also fixed several practical runtime issues along the way:
+
+  - frontend upload reset crash
+  - Failed to fetch issues from local API/artifact URL mismatches
+  - broken review actions
+  - stale export behavior
+  - single-page export caused by stale export reuse
+  - camera-mode black page / black spot output caused by aggressive normalization and black warp borders
+
+  What is implemented now:
+
+  - full-stack app structure
+  - real upload -> process -> review -> export flow
+  - backend-backed jobs and pages
+  - persistent review actions
+  - real PDF export from extracted page images
+  - separate screen and camera processing modes
+  - polished frontend UI
+
+  What is still simplified:
+
+  - the CV pipeline is heuristic-based, not ML-based
+  - camera mode still does not do advanced dewarping for curved book pages
+  - hand/occlusion detection is approximate
+  - OCR/searchable PDF is not implemented
+  - background processing is still fairly MVP-style rather than a robust async worker system
+
+  The next best step would be improving extraction quality further, especially for difficult physical-page videos:
+
+  - better contour stability and cropping
+  - stronger transition rejection during page turns
+  - improved duplicate safety on similar-looking physical pages
+  - optional OCR/text-layer support after page extraction quality is stable

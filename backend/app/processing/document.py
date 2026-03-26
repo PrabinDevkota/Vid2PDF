@@ -47,7 +47,7 @@ def detect_document_region(frame: np.ndarray) -> DocumentDetection:
         )
 
     ordered_corners = _order_points(best_contour.reshape(4, 2).astype("float32"))
-    corrected = _warp_document(frame, ordered_corners)
+    corrected = crop_document_image(_warp_document(frame, ordered_corners))
     page_coverage = float(cv2.contourArea(best_contour) / (width * height))
     bounding_x, bounding_y, bounding_w, bounding_h = cv2.boundingRect(best_contour)
     rectangularity = float(
@@ -67,7 +67,8 @@ def detect_document_region(frame: np.ndarray) -> DocumentDetection:
 
 
 def normalize_final_page(image: np.ndarray) -> np.ndarray:
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    cropped_image = crop_document_image(image)
+    gray = cv2.cvtColor(cropped_image, cv2.COLOR_BGR2GRAY)
     cropped = _crop_dark_borders(gray)
     denoised = cv2.fastNlMeansDenoising(cropped, None, 8, 7, 21)
     flattened = _flatten_background(denoised)
@@ -109,6 +110,26 @@ def normalize_final_page(image: np.ndarray) -> np.ndarray:
         value=255,
     )
     return cv2.cvtColor(bordered, cv2.COLOR_GRAY2BGR)
+
+
+def crop_document_image(image: np.ndarray) -> np.ndarray:
+    height, width = image.shape[:2]
+    if height < 80 or width < 80:
+        return image
+
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    saturation = hsv[:, :, 1]
+    value = hsv[:, :, 2]
+
+    page_mask = _build_page_mask(gray, saturation, value)
+    cropped = _crop_from_mask(image, page_mask)
+    if cropped is not None:
+        return cropped
+
+    fallback_mask = _build_fallback_mask(gray)
+    fallback_cropped = _crop_from_mask(image, fallback_mask)
+    return fallback_cropped if fallback_cropped is not None else image
 
 
 def _warp_document(frame: np.ndarray, corners: np.ndarray) -> np.ndarray:
@@ -217,3 +238,108 @@ def _remove_border_connected_dark_regions(binary: np.ndarray) -> np.ndarray:
         cleaned[labels == label] = 255
 
     return cv2.bitwise_not(cleaned)
+
+
+def _build_page_mask(gray: np.ndarray, saturation: np.ndarray, value: np.ndarray) -> np.ndarray:
+    brightness_threshold = int(np.clip(np.percentile(gray, 72), 120, 245))
+    saturation_threshold = int(np.clip(np.percentile(saturation, 55), 26, 110))
+    value_threshold = int(np.clip(np.percentile(value, 70), 120, 245))
+
+    bright_mask = gray >= brightness_threshold
+    low_saturation_mask = saturation <= saturation_threshold
+    page_mask = np.where(bright_mask & low_saturation_mask & (value >= value_threshold), 255, 0).astype(np.uint8)
+    return _stabilize_mask(page_mask)
+
+
+def _build_fallback_mask(gray: np.ndarray) -> np.ndarray:
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    _, thresholded = cv2.threshold(
+        blurred,
+        0,
+        255,
+        cv2.THRESH_BINARY + cv2.THRESH_OTSU,
+    )
+
+    border_ratio = _border_white_ratio(thresholded)
+    if border_ratio > 0.7:
+        thresholded = cv2.bitwise_not(thresholded)
+
+    return _stabilize_mask(thresholded)
+
+
+def _stabilize_mask(mask: np.ndarray) -> np.ndarray:
+    height, width = mask.shape[:2]
+    kernel_size = max(5, int(round(min(height, width) * 0.03)))
+    if kernel_size % 2 == 0:
+        kernel_size += 1
+
+    close_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
+    open_kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT,
+        (max(3, kernel_size // 3), max(3, kernel_size // 3)),
+    )
+    stabilized = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, close_kernel, iterations=1)
+    stabilized = cv2.morphologyEx(stabilized, cv2.MORPH_OPEN, open_kernel, iterations=1)
+    return stabilized
+
+
+def _crop_from_mask(image: np.ndarray, mask: np.ndarray) -> np.ndarray | None:
+    height, width = image.shape[:2]
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return None
+
+    image_area = height * width
+    best_bounds = None
+    best_score = 0.0
+
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        if area < image_area * 0.35:
+            continue
+
+        x, y, w, h = cv2.boundingRect(contour)
+        bounding_area = max(w * h, 1)
+        fill_ratio = float(area / bounding_area)
+        coverage = float(area / image_area)
+        aspect_ratio = w / max(h, 1)
+        if aspect_ratio < 0.45 or aspect_ratio > 1.9:
+            continue
+        if fill_ratio < 0.7:
+            continue
+
+        score = (coverage * 0.7) + (fill_ratio * 0.3)
+        if score > best_score:
+            best_score = score
+            best_bounds = (x, y, w, h)
+
+    if best_bounds is None:
+        return None
+
+    x, y, w, h = best_bounds
+    padding = max(10, int(round(min(height, width) * 0.02)))
+    left = max(x - padding, 0)
+    top = max(y - padding, 0)
+    right = min(x + w + padding, width)
+    bottom = min(y + h + padding, height)
+
+    cropped_width = right - left
+    cropped_height = bottom - top
+    if cropped_width < width * 0.45 or cropped_height < height * 0.45:
+        return None
+
+    return image[top:bottom, left:right]
+
+
+def _border_white_ratio(mask: np.ndarray, border_size: int = 12) -> float:
+    height, width = mask.shape[:2]
+    border_size = max(1, min(border_size, height // 4, width // 4))
+    border_pixels = np.concatenate(
+        [
+            mask[:border_size, :].ravel(),
+            mask[-border_size:, :].ravel(),
+            mask[:, :border_size].ravel(),
+            mask[:, -border_size:].ravel(),
+        ]
+    )
+    return float(np.mean(border_pixels > 0))
