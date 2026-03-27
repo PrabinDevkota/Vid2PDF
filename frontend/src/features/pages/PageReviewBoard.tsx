@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProcessingJob } from "../../types";
 import { SectionCard } from "../../components/SectionCard";
 import {
+  addManualPage,
   bulkUpdatePages,
   reorderPages,
   resolveArtifactUrl,
@@ -18,9 +19,48 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
   const [draggedPageId, setDraggedPageId] = useState<string | null>(null);
+  const [videoCurrentTime, setVideoCurrentTime] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [isVideoReady, setIsVideoReady] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const visiblePages = job?.pages.filter((page) => !page.deleted) ?? [];
   const deletedPages = job?.pages.filter((page) => page.deleted) ?? [];
+  const manualPages = useMemo(
+    () => visiblePages.filter((page) => page.manual),
+    [visiblePages],
+  );
   const exportDownloadUrl = resolveArtifactUrl(job?.export.downloadUrl ?? null);
+  const sourceVideoUrl = resolveArtifactUrl(job?.sourceVideoUrl ?? null);
+
+  useEffect(() => {
+    setActionError(null);
+    setVideoCurrentTime(0);
+    setVideoDuration(0);
+    setIsVideoReady(false);
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
+  }, [job?.id]);
+
+  function formatTime(seconds: number): string {
+    const safeSeconds = Math.max(seconds, 0);
+    const totalSeconds = Math.floor(safeSeconds);
+    const minutes = Math.floor(totalSeconds / 60);
+    const remainder = totalSeconds % 60;
+    const tenths = Math.floor((safeSeconds - totalSeconds) * 10);
+    return `${minutes}:${String(remainder).padStart(2, "0")}.${tenths}`;
+  }
+
+  function seekVideo(targetTime: number) {
+    const element = videoRef.current;
+    if (!element) {
+      return;
+    }
+    const clamped = Math.max(0, Math.min(targetTime, videoDuration || targetTime));
+    element.currentTime = clamped;
+    setVideoCurrentTime(clamped);
+  }
 
   async function handleRotate(pageId: string, rotation: number) {
     if (!job) {
@@ -163,6 +203,23 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
     }
   }
 
+  async function handleAddManualPage() {
+    if (!job) {
+      return;
+    }
+
+    setIsMutating(true);
+    setActionError(null);
+    try {
+      const updatedJob = await addManualPage(job.id, videoCurrentTime);
+      onJobUpdated(updatedJob);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to add manual page.");
+    } finally {
+      setIsMutating(false);
+    }
+  }
+
   return (
     <SectionCard
       eyebrow="Review"
@@ -228,6 +285,128 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                 <strong>{job.stages.filter((stage) => stage.status === "complete").length}</strong>
                 <span>Stages complete</span>
               </div>
+              <div className="review-metric">
+                <strong>{manualPages.length}</strong>
+                <span>Manual recovery pages</span>
+              </div>
+            </div>
+          </div>
+          <div className="review-workspace">
+            <div className="review-video-panel">
+              <div className="review-video-panel__header">
+                <div>
+                  <span className="review-summary-card__eyebrow">Source video</span>
+                  <h3>Recover missed pages from the original recording</h3>
+                  <p className="muted">
+                    Pause on a clean frame, scrub precisely, and save it as a real review page.
+                  </p>
+                </div>
+                <button
+                  className="primary-button"
+                  disabled={!sourceVideoUrl || isMutating || !isVideoReady}
+                  onClick={() => void handleAddManualPage()}
+                  type="button"
+                >
+                  Add current frame as page
+                </button>
+              </div>
+              {sourceVideoUrl ? (
+                <div className="video-reviewer">
+                  <div className="video-reviewer__surface">
+                    <video
+                      className="video-reviewer__player"
+                      controls
+                      preload="metadata"
+                      ref={videoRef}
+                      src={sourceVideoUrl}
+                      onLoadedMetadata={(event) => {
+                        const duration = Number.isFinite(event.currentTarget.duration)
+                          ? event.currentTarget.duration
+                          : 0;
+                        setVideoDuration(duration);
+                        setVideoCurrentTime(event.currentTarget.currentTime);
+                        setIsVideoReady(duration > 0);
+                      }}
+                      onTimeUpdate={(event) => setVideoCurrentTime(event.currentTarget.currentTime)}
+                    />
+                  </div>
+                  <div className="video-reviewer__controls">
+                    <div className="video-reviewer__timeline">
+                      <input
+                        aria-label="Video timeline"
+                        className="video-reviewer__scrubber"
+                        disabled={!isVideoReady}
+                        max={videoDuration || 0}
+                        min={0}
+                        onChange={(event) => seekVideo(Number(event.target.value))}
+                        step={0.05}
+                        type="range"
+                        value={Math.min(videoCurrentTime, videoDuration || videoCurrentTime)}
+                      />
+                      <div className="video-reviewer__time-row">
+                        <strong>{formatTime(videoCurrentTime)}</strong>
+                        <span>{formatTime(videoDuration)}</span>
+                      </div>
+                    </div>
+                    <div className="video-reviewer__actions">
+                      <button
+                        className="secondary-button"
+                        disabled={!isVideoReady}
+                        onClick={() => seekVideo(videoCurrentTime - 1)}
+                        type="button"
+                      >
+                        Back 1s
+                      </button>
+                      <button
+                        className="secondary-button"
+                        disabled={!isVideoReady}
+                        onClick={() => seekVideo(videoCurrentTime - 0.2)}
+                        type="button"
+                      >
+                        Back 0.2s
+                      </button>
+                      <button
+                        className="secondary-button"
+                        disabled={!isVideoReady}
+                        onClick={() => seekVideo(videoCurrentTime + 0.2)}
+                        type="button"
+                      >
+                        Forward 0.2s
+                      </button>
+                      <button
+                        className="secondary-button"
+                        disabled={!isVideoReady}
+                        onClick={() => seekVideo(videoCurrentTime + 1)}
+                        type="button"
+                      >
+                        Forward 1s
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <strong>Source video unavailable</strong>
+                  <p>This session does not expose a playable source video artifact yet.</p>
+                </div>
+              )}
+            </div>
+            <div className="review-recovery-panel">
+              <span className="review-summary-card__eyebrow">Recovery status</span>
+              <div className="review-recovery-panel__stats">
+                <div className="review-recovery-stat">
+                  <strong>{manualPages.length}</strong>
+                  <span>Recovered manually</span>
+                </div>
+                <div className="review-recovery-stat">
+                  <strong>{visiblePages.length - manualPages.length}</strong>
+                  <span>Kept automatically</span>
+                </div>
+              </div>
+              <p className="muted">
+                Manual pages persist through the same rotate, reorder, delete, restore, and export path
+                as automatically extracted pages.
+              </p>
             </div>
           </div>
           <div className="review-toolbar">
@@ -363,14 +542,23 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                   </div>
                   <div className="page-card__content">
                     <div className="page-card__header">
-                      <h4>Page {index + 1}</h4>
+                      <div className="page-card__title">
+                        <h4>Page {index + 1}</h4>
+                        {page.manual ? (
+                          <span className="page-origin-badge page-origin-badge--manual">Manual</span>
+                        ) : (
+                          <span className="page-origin-badge">Auto</span>
+                        )}
+                      </div>
                       <span className="page-score">
                         Score {page.sharpnessScore.toFixed(2)}
                       </span>
                     </div>
                     <div className="page-meta-row">
                       <span>
-                        Segment {page.segmentStart.toFixed(1)}s to {page.segmentEnd.toFixed(1)}s
+                        {page.manual
+                          ? `Recovered at ${page.sourceTimestamp.toFixed(1)}s`
+                          : `Segment ${page.segmentStart.toFixed(1)}s to ${page.segmentEnd.toFixed(1)}s`}
                       </span>
                       <span>Rotation {page.rotation}°</span>
                     </div>
@@ -426,7 +614,9 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                 {deletedPages.map((page) => (
                   <article className="deleted-page-card" key={page.id}>
                     <div>
-                      <strong>{page.previewLabel}</strong>
+                      <strong>
+                        {page.previewLabel} {page.manual ? "• Manual" : "• Auto"}
+                      </strong>
                       <span>
                         Frame #{page.sourceFrameIndex} at {page.sourceTimestamp.toFixed(1)}s
                       </span>

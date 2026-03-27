@@ -31,6 +31,7 @@ export interface ExtractedPage {
   segmentEnd: number;
   sourceFrameIndex: number;
   sourceTimestamp: number;
+  manual: boolean;
   rotation: number;
   status: PageStatus;
   deleted: boolean;
@@ -50,6 +51,7 @@ export interface ProcessingJob {
   id: string;
   filename: string;
   processingMode: ProcessingMode;
+  sourceVideoUrl: string | null;
   status: JobStatus;
   createdAt: string;
   updatedAt: string;

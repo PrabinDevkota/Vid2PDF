@@ -39,6 +39,7 @@ class Page:
     segment_end: float
     source_frame_index: int
     source_timestamp: float
+    manual: bool = False
     rotation: int = 0
     status: PageStatus = "active"
     deleted: bool = False

@@ -7,6 +7,7 @@ from pathlib import Path
 from threading import RLock
 from uuid import uuid4
 
+import cv2
 from fastapi import UploadFile
 
 from app.core.settings import settings
@@ -14,14 +15,17 @@ from app.models.job import ExportArtifact, Job, Page, ProcessingMode, Progress, 
 from app.processing.context import build_pipeline_context
 from app.processing.deduper import remove_duplicates
 from app.processing.debug import write_pipeline_debug_report
+from app.processing.document import detect_document_region
 from app.processing.pipeline import PIPELINE_STAGES, build_export
 from app.processing.preview import attach_previews
+from app.processing.scoring import compute_frame_quality
 from app.processing.sampler import load_video_metadata, sample_frames
 from app.processing.sequence import collapse_sequence_candidates
 from app.processing.segmenter import detect_stable_segments
 from app.processing.selector import select_best_frames
 from app.processing.types import FrameQuality, SampledFrame, SelectedPage
 from app.schemas.job import (
+    AddManualPageRequest,
     BulkUpdatePagesRequest,
     ExportResponse,
     JobResponse,
@@ -136,6 +140,85 @@ class JobService:
                     page.deleted = payload.deleted
                     page.status = "deleted" if payload.deleted else "active"
 
+            self._invalidate_export(job)
+            job.updated_at = datetime.now(timezone.utc)
+            self._save_jobs()
+            return self._to_response(job)
+
+    def add_manual_page(self, job_id: str, payload: AddManualPageRequest) -> JobResponse | None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None or not job.upload_path:
+                return None
+            upload_path = job.upload_path
+            processing_mode = job.processing_mode
+
+        frame_index, timestamp, frame = self._extract_video_frame(upload_path, payload.timestampSeconds)
+        if frame is None:
+            return None
+
+        if processing_mode == "camera":
+            detection = detect_document_region(frame)
+            processed_frame = detection.corrected_image
+        else:
+            detection = None
+            processed_frame = frame
+
+        quality = compute_frame_quality(
+            processed_frame,
+            mode=processing_mode,
+            detection=detection,
+            transition_penalty=0.0,
+        )
+        sampled_frame = SampledFrame(
+            timestamp=timestamp,
+            frame_index=frame_index,
+            image=processed_frame,
+            quality=quality,
+            detection=detection,
+            change_ratio=0.0,
+        )
+        manual_page = SelectedPage(
+            page_id=f"manual-{uuid4().hex[:8]}",
+            page_number=0,
+            label="Manual page",
+            source_segment_id=f"manual-{frame_index}",
+            segment_start=timestamp,
+            segment_end=timestamp,
+            selected_frame=sampled_frame,
+            image_path="",
+            thumbnail_path="",
+            notes=[
+                f"Added manually from source video at {timestamp:.2f}s.",
+                "Manual recovery page created from the current video frame.",
+            ],
+        )
+        context = build_pipeline_context(job_id=job_id, upload_path=upload_path, processing_mode=processing_mode)
+        attach_previews([manual_page], context=context)
+
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return None
+            next_index = len(job.pages)
+            job.pages.append(
+                Page(
+                    id=manual_page.page_id,
+                    job_id=job.id,
+                    order_index=next_index,
+                    page_number=next_index + 1,
+                    preview_label=f"Manual page {next_index + 1}",
+                    thumbnail_url=manual_page.preview_url,
+                    image_url=manual_page.image_url,
+                    sharpness_score=manual_page.selected_frame.quality.score,
+                    segment_start=manual_page.segment_start,
+                    segment_end=manual_page.segment_end,
+                    source_frame_index=manual_page.selected_frame.frame_index,
+                    source_timestamp=manual_page.selected_frame.timestamp,
+                    manual=True,
+                )
+            )
+            job.notes.append(f"Manual page added at {timestamp:.2f}s from the source video.")
             self._invalidate_export(job)
             job.updated_at = datetime.now(timezone.utc)
             self._save_jobs()
@@ -442,6 +525,37 @@ class JobService:
             if changed:
                 self._save_jobs()
 
+    def _extract_video_frame(
+        self,
+        upload_path: str,
+        requested_timestamp: float,
+    ) -> tuple[int, float, object | None]:
+        capture = cv2.VideoCapture(upload_path)
+        if not capture.isOpened():
+            return -1, requested_timestamp, None
+
+        fps = capture.get(cv2.CAP_PROP_FPS) or 0.0
+        frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        clamped_timestamp = max(requested_timestamp, 0.0)
+        if fps > 0 and frame_count > 0:
+            max_timestamp = max((frame_count - 1) / fps, 0.0)
+            clamped_timestamp = min(clamped_timestamp, max_timestamp)
+
+        capture.set(cv2.CAP_PROP_POS_MSEC, clamped_timestamp * 1000.0)
+        success, frame = capture.read()
+        if not success and fps > 0:
+            frame_index = min(max(int(round(clamped_timestamp * fps)), 0), max(frame_count - 1, 0))
+            capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+            success, frame = capture.read()
+        else:
+            frame_index = int(capture.get(cv2.CAP_PROP_POS_FRAMES) or 0)
+
+        capture.release()
+        if not success:
+            return -1, clamped_timestamp, None
+        timestamp = (frame_index / fps) if fps > 0 else clamped_timestamp
+        return frame_index, timestamp, frame
+
     def _to_selected_page(self, page: Page) -> SelectedPage:
         if not page.image_url or not page.thumbnail_url:
             raise ValueError("Page image artifacts are missing.")
@@ -508,6 +622,7 @@ class JobService:
             id=job.id,
             filename=job.filename,
             processingMode=job.processing_mode,
+            sourceVideoUrl=self._source_video_url(job),
             status=job.status,
             createdAt=job.created_at,
             updatedAt=job.updated_at,
@@ -544,6 +659,7 @@ class JobService:
                     segmentEnd=page.segment_end,
                     sourceFrameIndex=page.source_frame_index,
                     sourceTimestamp=page.source_timestamp,
+                    manual=page.manual,
                     rotation=page.rotation,
                     status=page.status,
                     deleted=page.deleted,
@@ -563,6 +679,16 @@ class JobService:
             completedAt=export.completed_at,
             error=export.error,
         )
+
+    def _source_video_url(self, job: Job) -> str | None:
+        if not job.upload_path:
+            return None
+        upload_path = Path(job.upload_path)
+        try:
+            relative_path = upload_path.relative_to(self._storage_root)
+        except ValueError:
+            return None
+        return f"{settings.public_artifact_base_url}/{relative_path.as_posix()}"
 
     def _invalidate_export(self, job: Job) -> None:
         job.export = ExportArtifact()
@@ -626,6 +752,7 @@ class JobService:
                     "segment_end": page.segment_end,
                     "source_frame_index": page.source_frame_index,
                     "source_timestamp": page.source_timestamp,
+                    "manual": page.manual,
                     "rotation": page.rotation,
                     "status": page.status,
                     "deleted": page.deleted,
@@ -687,6 +814,7 @@ class JobService:
                     segment_end=float(page["segment_end"]),
                     source_frame_index=int(page["source_frame_index"]),
                     source_timestamp=float(page["source_timestamp"]),
+                    manual=bool(page.get("manual", False)),
                     rotation=int(page.get("rotation", 0)),
                     status=page.get("status", "active"),  # type: ignore[arg-type]
                     deleted=bool(page.get("deleted", False)),

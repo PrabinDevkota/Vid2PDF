@@ -31,6 +31,7 @@ class PageResponse(BaseModel):
     segmentEnd: float
     sourceFrameIndex: int
     sourceTimestamp: float
+    manual: bool
     rotation: int
     status: Literal["active", "deleted"]
     deleted: bool
@@ -50,6 +51,7 @@ class JobResponse(BaseModel):
     id: str
     filename: str
     processingMode: Literal["screen", "camera"]
+    sourceVideoUrl: str | None
     status: Literal["queued", "processing", "ready", "failed"]
     createdAt: datetime
     updatedAt: datetime
@@ -72,6 +74,10 @@ class BulkUpdatePagesRequest(BaseModel):
     pageIds: list[str]
     rotation: int | None = None
     deleted: bool | None = None
+
+
+class AddManualPageRequest(BaseModel):
+    timestampSeconds: float
 
 
 class ReorderPagesRequest(BaseModel):

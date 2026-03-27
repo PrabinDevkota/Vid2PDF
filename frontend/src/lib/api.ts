@@ -88,6 +88,21 @@ export async function reorderPages(
   return readJson<ProcessingJob>(response, "Failed to reorder pages");
 }
 
+export async function addManualPage(
+  jobId: string,
+  timestampSeconds: number,
+): Promise<ProcessingJob> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/pages/manual`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ timestampSeconds }),
+  });
+
+  return readJson<ProcessingJob>(response, "Failed to add page from video");
+}
+
 export async function startExport(jobId: string): Promise<ProcessingJob["export"]> {
   const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/export`, {
     method: "POST",

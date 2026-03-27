@@ -3,6 +3,7 @@ from typing import Literal
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from app.schemas.job import (
+    AddManualPageRequest,
     BulkUpdatePagesRequest,
     ExportResponse,
     JobResponse,
@@ -56,6 +57,14 @@ def bulk_update_pages(job_id: str, payload: BulkUpdatePagesRequest) -> JobRespon
     job = job_service.bulk_update_pages(job_id, payload)
     if job is None:
         raise HTTPException(status_code=404, detail="Job or pages not found")
+    return job
+
+
+@router.post("/jobs/{job_id}/pages/manual", response_model=JobResponse)
+def add_manual_page(job_id: str, payload: AddManualPageRequest) -> JobResponse:
+    job = job_service.add_manual_page(job_id, payload)
+    if job is None:
+        raise HTTPException(status_code=400, detail="Could not add a page from the requested video frame")
     return job
 
 

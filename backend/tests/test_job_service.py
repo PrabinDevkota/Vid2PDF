@@ -1,11 +1,13 @@
 from datetime import datetime, timezone
 
+import cv2
+import numpy as np
 from fastapi.testclient import TestClient
 
 from app.core.settings import settings
 from app.main import app
 from app.models.job import ExportArtifact, Job, Page, Stage
-from app.schemas.job import BulkUpdatePagesRequest, UpdatePageRequest
+from app.schemas.job import AddManualPageRequest, BulkUpdatePagesRequest, UpdatePageRequest
 from app.services.job_service import JobService
 
 
@@ -175,6 +177,77 @@ def test_job_service_marks_interrupted_jobs_failed_after_reload(tmp_path) -> Non
     assert reloaded.status == "failed"
     assert reloaded.progress.message == "Processing interrupted by server restart."
     assert reloaded.export.status == "failed"
+
+
+def test_add_manual_page_persists_artifacts_and_export_state(tmp_path) -> None:
+    settings.storage_path = str(tmp_path)
+    service = JobService()
+    now = datetime.now(timezone.utc)
+    video_path = tmp_path / "uploads" / "manual-test.mp4"
+    video_path.parent.mkdir(parents=True, exist_ok=True)
+
+    writer = cv2.VideoWriter(
+        str(video_path),
+        cv2.VideoWriter_fourcc(*"mp4v"),
+        5.0,
+        (160, 120),
+    )
+    for index in range(10):
+        frame = np.full((120, 160, 3), 240, dtype=np.uint8)
+        cv2.putText(
+            frame,
+            f"Page {index}",
+            (20, 65),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (30, 30, 30),
+            2,
+            cv2.LINE_AA,
+        )
+        writer.write(frame)
+    writer.release()
+
+    job = Job(
+        id="job-manual",
+        filename="manual.mp4",
+        processing_mode="screen",
+        status="ready",
+        created_at=now,
+        updated_at=now,
+        upload_path=str(video_path),
+        pages=[
+            Page(
+                id="page-1",
+                job_id="job-manual",
+                order_index=0,
+                page_number=1,
+                preview_label="Page 1",
+                thumbnail_url="/artifacts/jobs/job-manual/thumbnails/page-1-thumb.jpg",
+                image_url="/artifacts/jobs/job-manual/pages/page-1.png",
+                sharpness_score=0.9,
+                segment_start=0.0,
+                segment_end=1.0,
+                source_frame_index=3,
+                source_timestamp=0.6,
+            )
+        ],
+        export=ExportArtifact(status="ready", filename="job-manual.pdf"),
+    )
+    service._jobs[job.id] = job
+
+    response = service.add_manual_page(job.id, AddManualPageRequest(timestampSeconds=0.8))
+
+    assert response is not None
+    assert len(response.pages) == 2
+    manual_page = response.pages[-1]
+    assert manual_page.manual is True
+    assert manual_page.deleted is False
+    assert manual_page.thumbnailUrl is not None
+    assert manual_page.imageUrl is not None
+    assert response.export.status == "idle"
+    assert "uploads/manual-test.mp4" in (response.sourceVideoUrl or "")
+    assert (tmp_path / manual_page.thumbnailUrl.removeprefix("/artifacts/")).exists()
+    assert (tmp_path / manual_page.imageUrl.removeprefix("/artifacts/")).exists()
 
 
 def test_upload_rejects_invalid_processing_mode() -> None:
