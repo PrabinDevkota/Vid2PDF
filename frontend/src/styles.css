@@ -326,10 +326,27 @@ button {
 
 .mode-selector,
 .review-actions,
-.upload-notes {
+.upload-notes,
+.review-toolbar,
+.review-toolbar__group {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.review-toolbar {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.review-toolbar__group {
+  align-items: center;
+}
+
+.review-toolbar__hint {
+  color: var(--text-soft);
+  font-size: 0.84rem;
+  line-height: 1.5;
 }
 
 .mode-pill,
@@ -718,6 +735,12 @@ button {
   box-shadow: var(--shadow-sm);
 }
 
+.page-card--dragging {
+  opacity: 0.68;
+  border-color: rgba(33, 85, 204, 0.28);
+  box-shadow: 0 14px 30px rgba(33, 85, 204, 0.1);
+}
+
 .page-card__preview {
   position: relative;
   display: flex;
@@ -739,6 +762,19 @@ button {
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(20, 32, 51, 0.08);
   color: var(--text-soft);
+  font-weight: 600;
+}
+
+.page-card__drag-handle {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  padding: 6px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(20, 32, 51, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text-soft);
+  font-size: 0.74rem;
   font-weight: 600;
 }
 
@@ -835,6 +871,12 @@ button {
   background: var(--surface-strong);
 }
 
+.deleted-page-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .page-card__actions button {
   padding: 9px 11px;
   border-radius: 10px;
@@ -893,7 +935,8 @@ button {
   .page-card__header,
   .page-meta-row,
   .panel-topline,
-  .upload-actions {
+  .upload-actions,
+  .review-toolbar {
     flex-direction: column;
     align-items: flex-start;
   }

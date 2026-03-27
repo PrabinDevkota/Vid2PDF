@@ -2,7 +2,13 @@ from typing import Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from app.schemas.job import ExportResponse, JobResponse, ReorderPagesRequest, UpdatePageRequest
+from app.schemas.job import (
+    BulkUpdatePagesRequest,
+    ExportResponse,
+    JobResponse,
+    ReorderPagesRequest,
+    UpdatePageRequest,
+)
 from app.services.job_service import job_service
 
 router = APIRouter()
@@ -42,6 +48,14 @@ def update_page(job_id: str, page_id: str, payload: UpdatePageRequest) -> JobRes
     job = job_service.update_page(job_id, page_id, payload)
     if job is None:
         raise HTTPException(status_code=404, detail="Job or page not found")
+    return job
+
+
+@router.patch("/jobs/{job_id}/pages", response_model=JobResponse)
+def bulk_update_pages(job_id: str, payload: BulkUpdatePagesRequest) -> JobResponse:
+    job = job_service.bulk_update_pages(job_id, payload)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job or pages not found")
     return job
 
 

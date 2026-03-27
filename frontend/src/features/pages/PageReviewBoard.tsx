@@ -1,7 +1,13 @@
 import { useState } from "react";
 import type { ProcessingJob } from "../../types";
 import { SectionCard } from "../../components/SectionCard";
-import { reorderPages, resolveArtifactUrl, startExport, updatePage } from "../../lib/api";
+import {
+  bulkUpdatePages,
+  reorderPages,
+  resolveArtifactUrl,
+  startExport,
+  updatePage,
+} from "../../lib/api";
 
 interface PageReviewBoardProps {
   job: ProcessingJob | null;
@@ -11,6 +17,7 @@ interface PageReviewBoardProps {
 export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
+  const [draggedPageId, setDraggedPageId] = useState<string | null>(null);
   const visiblePages = job?.pages.filter((page) => !page.deleted) ?? [];
   const deletedPages = job?.pages.filter((page) => page.deleted) ?? [];
   const exportDownloadUrl = resolveArtifactUrl(job?.export.downloadUrl ?? null);
@@ -75,6 +82,65 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
       onJobUpdated(updatedJob);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Failed to reorder pages.");
+    } finally {
+      setIsMutating(false);
+    }
+  }
+
+  async function handleReorder(activeOrder: string[]) {
+    if (!job) {
+      return;
+    }
+
+    const deletedPageIds = job.pages.filter((page) => page.deleted).map((page) => page.id);
+    setIsMutating(true);
+    setActionError(null);
+    try {
+      const updatedJob = await reorderPages(job.id, [...activeOrder, ...deletedPageIds]);
+      onJobUpdated(updatedJob);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to reorder pages.");
+    } finally {
+      setIsMutating(false);
+      setDraggedPageId(null);
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (!job || visiblePages.length === 0) {
+      return;
+    }
+
+    setIsMutating(true);
+    setActionError(null);
+    try {
+      const updatedJob = await bulkUpdatePages(job.id, {
+        pageIds: visiblePages.map((page) => page.id),
+        deleted: true,
+      });
+      onJobUpdated(updatedJob);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to remove pages.");
+    } finally {
+      setIsMutating(false);
+    }
+  }
+
+  async function handleRestoreAll() {
+    if (!job || deletedPages.length === 0) {
+      return;
+    }
+
+    setIsMutating(true);
+    setActionError(null);
+    try {
+      const updatedJob = await bulkUpdatePages(job.id, {
+        pageIds: deletedPages.map((page) => page.id),
+        deleted: false,
+      });
+      onJobUpdated(updatedJob);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to restore pages.");
     } finally {
       setIsMutating(false);
     }
@@ -149,7 +215,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                 <span>{job.progress.percent}% complete</span>
               </div>
             </div>
-              <div className="review-metrics">
+            <div className="review-metrics">
               <div className="review-metric">
                 <strong>{visiblePages.length}</strong>
                 <span>Pages in review</span>
@@ -163,6 +229,29 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                 <span>Stages complete</span>
               </div>
             </div>
+          </div>
+          <div className="review-toolbar">
+            <div className="review-toolbar__group">
+              <button
+                className="secondary-button"
+                disabled={isMutating || visiblePages.length === 0}
+                onClick={() => void handleBulkDelete()}
+                type="button"
+              >
+                Remove all active pages
+              </button>
+              <button
+                className="secondary-button"
+                disabled={isMutating || deletedPages.length === 0}
+                onClick={() => void handleRestoreAll()}
+                type="button"
+              >
+                Restore all removed pages
+              </button>
+            </div>
+            <span className="review-toolbar__hint">
+              Drag active page cards to reorder them faster than move up/down.
+            </span>
           </div>
           <div className="stage-strip">
             {job.stages.map((stage) => (
@@ -228,9 +317,34 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                 const thumbnailUrl = resolveArtifactUrl(page.thumbnailUrl);
 
                 return (
-                <article className="page-card" key={page.id}>
+                <article
+                  className={`page-card ${draggedPageId === page.id ? "page-card--dragging" : ""}`}
+                  draggable={!isMutating}
+                  key={page.id}
+                  onDragEnd={() => setDraggedPageId(null)}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                  }}
+                  onDragStart={() => setDraggedPageId(page.id)}
+                  onDrop={() => {
+                    if (!draggedPageId || draggedPageId === page.id) {
+                      return;
+                    }
+
+                    const reorderedIds = [...visiblePages.map((item) => item.id)];
+                    const fromIndex = reorderedIds.indexOf(draggedPageId);
+                    const toIndex = reorderedIds.indexOf(page.id);
+                    if (fromIndex < 0 || toIndex < 0) {
+                      return;
+                    }
+                    reorderedIds.splice(fromIndex, 1);
+                    reorderedIds.splice(toIndex, 0, draggedPageId);
+                    void handleReorder(reorderedIds);
+                  }}
+                >
                   <div className="page-card__preview">
                     <div className="page-card__preview-tag">Page preview</div>
+                    <div className="page-card__drag-handle">Drag to reorder</div>
                     {thumbnailUrl ? (
                       <img
                         alt={page.previewLabel}
@@ -317,14 +431,16 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                         Frame #{page.sourceFrameIndex} at {page.sourceTimestamp.toFixed(1)}s
                       </span>
                     </div>
-                    <button
-                      className="secondary-button"
-                      disabled={isMutating}
-                      onClick={() => void handleDelete(page.id, false)}
-                      type="button"
-                    >
-                      Restore
-                    </button>
+                    <div className="deleted-page-card__actions">
+                      <button
+                        className="secondary-button"
+                        disabled={isMutating}
+                        onClick={() => void handleDelete(page.id, false)}
+                        type="button"
+                      >
+                        Restore
+                      </button>
+                    </div>
                   </article>
                 ))}
               </div>

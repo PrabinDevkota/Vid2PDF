@@ -290,7 +290,7 @@ def _crop_from_mask(image: np.ndarray, mask: np.ndarray) -> np.ndarray | None:
         return None
 
     image_area = height * width
-    best_bounds = None
+    best_contour = None
     best_score = 0.0
 
     for contour in contours:
@@ -311,17 +311,24 @@ def _crop_from_mask(image: np.ndarray, mask: np.ndarray) -> np.ndarray | None:
         score = (coverage * 0.7) + (fill_ratio * 0.3)
         if score > best_score:
             best_score = score
-            best_bounds = (x, y, w, h)
+            best_contour = contour
 
-    if best_bounds is None:
+    if best_contour is None:
         return None
 
-    x, y, w, h = best_bounds
-    padding = max(10, int(round(min(height, width) * 0.02)))
-    left = max(x - padding, 0)
-    top = max(y - padding, 0)
-    right = min(x + w + padding, width)
-    bottom = min(y + h + padding, height)
+    contour_mask = np.zeros_like(mask)
+    cv2.drawContours(contour_mask, [best_contour], -1, 255, thickness=-1)
+    coordinates = np.column_stack(np.where(contour_mask > 0))
+    if coordinates.size == 0:
+        return None
+
+    top, left = coordinates.min(axis=0)
+    bottom, right = coordinates.max(axis=0)
+    padding = max(6, int(round(min(height, width) * 0.012)))
+    left = max(int(left) - padding, 0)
+    top = max(int(top) - padding, 0)
+    right = min(right + padding + 1, width)
+    bottom = min(bottom + padding + 1, height)
 
     cropped_width = right - left
     cropped_height = bottom - top

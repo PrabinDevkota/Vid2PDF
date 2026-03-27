@@ -68,5 +68,11 @@ class UpdatePageRequest(BaseModel):
     deleted: bool | None = None
 
 
+class BulkUpdatePagesRequest(BaseModel):
+    pageIds: list[str]
+    rotation: int | None = None
+    deleted: bool | None = None
+
+
 class ReorderPagesRequest(BaseModel):
     orderedPageIds: list[str]

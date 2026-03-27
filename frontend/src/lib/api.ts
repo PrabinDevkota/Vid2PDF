@@ -58,6 +58,21 @@ export async function updatePage(
   return readJson<ProcessingJob>(response, "Failed to update page");
 }
 
+export async function bulkUpdatePages(
+  jobId: string,
+  payload: { pageIds: string[]; rotation?: number; deleted?: boolean },
+): Promise<ProcessingJob> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/pages`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return readJson<ProcessingJob>(response, "Failed to update selected pages");
+}
+
 export async function reorderPages(
   jobId: string,
   orderedPageIds: string[],
