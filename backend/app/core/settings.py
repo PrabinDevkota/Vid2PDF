@@ -37,6 +37,11 @@ class Settings(BaseModel):
     quality_sequence_min_cluster_similarity: float = 0.9
     quality_duplicate_layout_diff_threshold: float = 0.09
     quality_duplicate_profile_diff_threshold: float = 0.08
+    quality_duplicate_text_similarity_threshold: float = 0.9
+    quality_duplicate_text_structure_threshold: float = 0.88
+    quality_duplicate_low_text_visual_threshold: float = 0.94
+    quality_duplicate_far_visual_threshold: float = 0.975
+    quality_duplicate_text_density_threshold: float = 0.018
     quality_debug_artifacts_enabled: bool = True
     quality_debug_max_rejected_frames: int = 12
     quality_debug_max_kept_pages: int = 12

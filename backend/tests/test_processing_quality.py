@@ -43,6 +43,13 @@ def _build_alt_page_image(*, shift_x: int = 0) -> np.ndarray:
     return image
 
 
+def _build_similar_layout_page(*, marker_offset: int = 0) -> np.ndarray:
+    image = _build_page_image()
+    cv2.rectangle(image, (240, 88 + marker_offset), (286, 100 + marker_offset), (35, 35, 35), thickness=-1)
+    cv2.rectangle(image, (122, 348 - marker_offset), (198, 360 - marker_offset), (35, 35, 35), thickness=-1)
+    return image
+
+
 def _make_detection(
     corrected_image: np.ndarray,
     *,
@@ -212,6 +219,83 @@ def test_near_duplicate_pages_collapse_to_best_candidate() -> None:
     assert deduped[0].source_segment_id == "segment-b"
 
 
+def test_partial_duplicate_loses_to_clean_full_page_capture() -> None:
+    poor = SelectedPage(
+        page_id="page-a",
+        page_number=1,
+        label="Page A",
+        source_segment_id="segment-a",
+        segment_start=1.0,
+        segment_end=1.4,
+        selected_frame=_make_sampled_frame(
+            10,
+            1.2,
+            0.68,
+            single_page_score=0.62,
+            page_coverage=0.58,
+            background_intrusion_ratio=0.12,
+        ),
+        image_path="",
+        thumbnail_path="",
+    )
+    clean = SelectedPage(
+        page_id="page-b",
+        page_number=2,
+        label="Page B",
+        source_segment_id="segment-b",
+        segment_start=1.45,
+        segment_end=1.9,
+        selected_frame=_make_sampled_frame(11, 1.65, 0.94),
+        image_path="",
+        thumbnail_path="",
+    )
+    poor.selected_frame.image = _build_page_image(shift_x=6)
+    clean.selected_frame.image = _build_page_image()
+
+    deduped = remove_duplicates([poor, clean], max_hamming_distance=6)
+
+    assert len(deduped) == 1
+    assert deduped[0].source_segment_id == "segment-b"
+
+
+def test_intruded_duplicate_loses_to_clean_duplicate() -> None:
+    dirty = SelectedPage(
+        page_id="page-a",
+        page_number=1,
+        label="Page A",
+        source_segment_id="segment-a",
+        segment_start=6.0,
+        segment_end=6.4,
+        selected_frame=_make_sampled_frame(
+            60,
+            6.2,
+            0.74,
+            background_intrusion_ratio=0.16,
+        ),
+        image_path="",
+        thumbnail_path="",
+    )
+    clean = SelectedPage(
+        page_id="page-b",
+        page_number=2,
+        label="Page B",
+        source_segment_id="segment-b",
+        segment_start=6.45,
+        segment_end=6.9,
+        selected_frame=_make_sampled_frame(61, 6.65, 0.94),
+        image_path="",
+        thumbnail_path="",
+    )
+    dirty.selected_frame.image = _build_page_image(shift_x=5)
+    cv2.circle(dirty.selected_frame.image, (315, 420), 55, (125, 175, 220), thickness=-1)
+    clean.selected_frame.image = _build_page_image()
+
+    deduped = remove_duplicates([dirty, clean], max_hamming_distance=6)
+
+    assert len(deduped) == 1
+    assert deduped[0].source_segment_id == "segment-b"
+
+
 def test_deduper_keeps_distinct_page_layouts() -> None:
     first = SelectedPage(
         page_id="page-a",
@@ -241,6 +325,49 @@ def test_deduper_keeps_distinct_page_layouts() -> None:
     deduped = remove_duplicates([first, second], max_hamming_distance=6)
 
     assert len(deduped) == 2
+
+
+def test_deduper_keeps_adjacent_similar_layout_but_distinct_pages() -> None:
+    first = SelectedPage(
+        page_id="page-9",
+        page_number=9,
+        label="Page 9",
+        source_segment_id="segment-9",
+        segment_start=9.0,
+        segment_end=9.5,
+        selected_frame=_make_sampled_frame(90, 9.2, 0.9),
+        image_path="",
+        thumbnail_path="",
+    )
+    second = SelectedPage(
+        page_id="page-10",
+        page_number=10,
+        label="Page 10",
+        source_segment_id="segment-10",
+        segment_start=10.0,
+        segment_end=10.5,
+        selected_frame=_make_sampled_frame(100, 10.2, 0.91),
+        image_path="",
+        thumbnail_path="",
+    )
+    third = SelectedPage(
+        page_id="page-11",
+        page_number=11,
+        label="Page 11",
+        source_segment_id="segment-11",
+        segment_start=11.0,
+        segment_end=11.5,
+        selected_frame=_make_sampled_frame(110, 11.2, 0.92),
+        image_path="",
+        thumbnail_path="",
+    )
+    first.selected_frame.image = _build_similar_layout_page(marker_offset=0)
+    second.selected_frame.image = _build_similar_layout_page(marker_offset=18)
+    third.selected_frame.image = _build_similar_layout_page(marker_offset=32)
+
+    deduped = remove_duplicates([first, second, third], max_hamming_distance=6)
+
+    assert len(deduped) == 3
 
 
 def test_selector_prefers_clean_single_page_over_partial_spread() -> None:
