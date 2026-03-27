@@ -12,6 +12,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
   const visiblePages = job?.pages.filter((page) => !page.deleted) ?? [];
+  const deletedPages = job?.pages.filter((page) => page.deleted) ?? [];
   const exportDownloadUrl = resolveArtifactUrl(job?.export.downloadUrl ?? null);
 
   async function handleRotate(pageId: string, rotation: number) {
@@ -148,10 +149,14 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                 <span>{job.progress.percent}% complete</span>
               </div>
             </div>
-            <div className="review-metrics">
+              <div className="review-metrics">
               <div className="review-metric">
                 <strong>{visiblePages.length}</strong>
                 <span>Pages in review</span>
+              </div>
+              <div className="review-metric">
+                <strong>{deletedPages.length}</strong>
+                <span>Pages removed</span>
               </div>
               <div className="review-metric">
                 <strong>{job.stages.filter((stage) => stage.status === "complete").length}</strong>
@@ -295,6 +300,36 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
               })}
             </div>
           )}
+          {deletedPages.length > 0 ? (
+            <div className="deleted-pages-panel">
+              <div className="deleted-pages-panel__header">
+                <div>
+                  <strong>Removed pages</strong>
+                  <p>These pages are excluded from export, but can be restored.</p>
+                </div>
+              </div>
+              <div className="deleted-pages-list">
+                {deletedPages.map((page) => (
+                  <article className="deleted-page-card" key={page.id}>
+                    <div>
+                      <strong>{page.previewLabel}</strong>
+                      <span>
+                        Frame #{page.sourceFrameIndex} at {page.sourceTimestamp.toFixed(1)}s
+                      </span>
+                    </div>
+                    <button
+                      className="secondary-button"
+                      disabled={isMutating}
+                      onClick={() => void handleDelete(page.id, false)}
+                      type="button"
+                    >
+                      Restore
+                    </button>
+                  </article>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
     </SectionCard>

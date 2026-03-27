@@ -7,7 +7,7 @@ from uuid import uuid4
 from fastapi import UploadFile
 
 from app.core.settings import settings
-from app.models.job import ExportArtifact, Job, Page, Progress, Stage
+from app.models.job import ExportArtifact, Job, Page, ProcessingMode, Progress, Stage
 from app.processing.pipeline import PIPELINE_STAGES, build_export, run_reconstruction_pipeline
 from app.processing.types import FrameQuality, SampledFrame, SelectedPage
 from app.schemas.job import (
@@ -45,7 +45,11 @@ class JobService:
         job = self._jobs.get(job_id)
         return None if job is None else self._to_response(job)
 
-    async def create_job(self, file: UploadFile, processing_mode: str = "screen") -> JobResponse:
+    async def create_job(
+        self,
+        file: UploadFile,
+        processing_mode: ProcessingMode = "screen",
+    ) -> JobResponse:
         job_id = uuid4().hex[:12]
         created_at = datetime.now(timezone.utc)
         upload_path = self._uploads_root / f"{job_id}-{file.filename or 'upload.bin'}"
@@ -58,7 +62,7 @@ class JobService:
         job = Job(
             id=job_id,
             filename=file.filename or "uploaded-video",
-            processing_mode="camera" if processing_mode == "camera" else "screen",
+            processing_mode=processing_mode,
             status="queued",
             created_at=created_at,
             updated_at=created_at,

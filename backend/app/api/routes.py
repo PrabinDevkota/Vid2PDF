@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from app.schemas.job import ExportResponse, JobResponse, ReorderPagesRequest, UpdatePageRequest
@@ -22,7 +24,7 @@ def get_job(job_id: str) -> JobResponse:
 @router.post("/jobs/upload", response_model=JobResponse)
 async def upload_job(
     file: UploadFile = File(...),
-    processing_mode: str = Form("screen"),
+    processing_mode: Literal["screen", "camera"] = Form("screen"),
 ) -> JobResponse:
     return await job_service.create_job(file, processing_mode)
 
