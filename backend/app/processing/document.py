@@ -77,6 +77,9 @@ def detect_document_region(frame: np.ndarray) -> DocumentDetection:
             background_intrusion_ratio=1.0,
             border_touch_ratio=1.0,
             text_density=_text_density(frame),
+            contour_confidence=0.0,
+            gutter_ratio=1.0,
+            opposing_page_ratio=1.0,
             normalized=False,
         )
 
@@ -86,14 +89,31 @@ def detect_document_region(frame: np.ndarray) -> DocumentDetection:
     perspective_score = _perspective_score(ordered_corners)
     background_intrusion_ratio = _background_intrusion_ratio(corrected)
     text_density = _text_density(corrected)
+    contour_confidence = _contour_confidence(
+        page_coverage=page_coverage,
+        rectangularity=rectangularity,
+        perspective_score=perspective_score,
+        border_touch_ratio=border_touch_ratio,
+    )
+    gutter_ratio = _gutter_ratio(corrected)
+    opposing_page_ratio = _opposing_page_ratio(corrected)
     competing_penalty = min(competing_score / max(best_score, 0.001), 1.0)
-    single_page_score = max(single_page_score - (competing_penalty * 0.35), 0.0)
+    single_page_score = max(
+        single_page_score
+        - (competing_penalty * 0.35)
+        - min(gutter_ratio * 1.2, 0.35)
+        - min(opposing_page_ratio * 0.9, 0.35),
+        0.0,
+    )
     normalized = (
         page_coverage >= 0.42
         and rectangularity >= 0.62
         and border_touch_ratio <= 0.18
         and background_intrusion_ratio <= 0.2
         and single_page_score >= 0.58
+        and contour_confidence >= 0.62
+        and gutter_ratio <= 0.11
+        and opposing_page_ratio <= 0.2
     )
 
     return DocumentDetection(
@@ -108,6 +128,9 @@ def detect_document_region(frame: np.ndarray) -> DocumentDetection:
         background_intrusion_ratio=background_intrusion_ratio,
         border_touch_ratio=border_touch_ratio,
         text_density=text_density,
+        contour_confidence=contour_confidence,
+        gutter_ratio=gutter_ratio,
+        opposing_page_ratio=opposing_page_ratio,
         normalized=normalized,
     )
 
@@ -257,6 +280,60 @@ def _text_density(image: np.ndarray) -> float:
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     edges = cv2.Canny(gray, 60, 160)
     return float(np.mean(edges > 0))
+
+
+def _contour_confidence(
+    *,
+    page_coverage: float,
+    rectangularity: float,
+    perspective_score: float,
+    border_touch_ratio: float,
+) -> float:
+    return max(
+        0.0,
+        min(
+            (page_coverage * 0.34)
+            + (rectangularity * 0.28)
+            + (perspective_score * 0.24)
+            + ((1.0 - border_touch_ratio) * 0.14),
+            1.0,
+        ),
+    )
+
+
+def _gutter_ratio(image: np.ndarray) -> float:
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    height, width = gray.shape[:2]
+    if width < 60:
+        return 0.0
+    band_half_width = max(int(width * 0.06), 10)
+    center = width // 2
+    center_band = gray[:, max(center - band_half_width, 0) : min(center + band_half_width, width)]
+    left_band = gray[:, : max(int(width * 0.14), 1)]
+    right_band = gray[:, width - max(int(width * 0.14), 1) :]
+    center_dark = float(np.mean(center_band < 92))
+    edge_dark = float((np.mean(left_band < 92) + np.mean(right_band < 92)) / 2.0)
+    return max(0.0, center_dark - (edge_dark * 0.55))
+
+
+def _opposing_page_ratio(image: np.ndarray) -> float:
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    height, width = gray.shape[:2]
+    if width < 60:
+        return 0.0
+
+    left_third = gray[:, : width // 3]
+    center_third = gray[:, width // 3 : (2 * width) // 3]
+    right_third = gray[:, (2 * width) // 3 :]
+    left_text = float(np.mean(cv2.Canny(left_third, 60, 160) > 0))
+    center_text = float(np.mean(cv2.Canny(center_third, 60, 160) > 0))
+    right_text = float(np.mean(cv2.Canny(right_third, 60, 160) > 0))
+    side_text = min(left_text, right_text)
+    dominant_side = max(left_text, right_text)
+
+    if center_text <= 0.0:
+        return dominant_side
+    return max(0.0, side_text + max(0.0, dominant_side - (center_text * 0.75)))
 
 
 def _border_touch_ratio(

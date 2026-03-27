@@ -67,15 +67,21 @@ def _is_near_duplicate(left: SelectedPage, right: SelectedPage, max_hamming_dist
     right_signature = _content_signature(right)
     content_diff = float(np.mean(np.abs(left_signature - right_signature)))
     histogram_similarity = _histogram_similarity(left_signature, right_signature)
+    layout_diff = _layout_diff(left, right)
+    profile_diff = _profile_diff(left, right)
     temporal_gap = abs(left.segment_start - right.segment_start)
 
-    if content_diff <= settings.quality_duplicate_content_diff_threshold:
+    if (
+        content_diff <= settings.quality_duplicate_content_diff_threshold
+        and layout_diff <= settings.quality_duplicate_layout_diff_threshold
+    ):
         return True
 
     if (
         temporal_gap <= settings.quality_sequence_duplicate_seconds
         and hash_distance <= max_hamming_distance + 2
         and histogram_similarity >= settings.quality_duplicate_histogram_threshold
+        and profile_diff <= settings.quality_duplicate_profile_diff_threshold
     ):
         return True
 
@@ -92,12 +98,48 @@ def _content_signature(page: SelectedPage) -> np.ndarray:
     return normalized
 
 
+def _layout_signature(page: SelectedPage) -> np.ndarray:
+    image = page.selected_frame.image
+    if image is None:
+        return np.zeros((40, 40), dtype=np.float32)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    resized = cv2.resize(gray, (40, 40), interpolation=cv2.INTER_AREA)
+    binary = cv2.adaptiveThreshold(
+        resized,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY_INV,
+        15,
+        7,
+    )
+    return (binary.astype(np.float32) / 255.0)
+
+
+def _projection_profile(page: SelectedPage) -> tuple[np.ndarray, np.ndarray]:
+    layout = _layout_signature(page)
+    return np.mean(layout, axis=1), np.mean(layout, axis=0)
+
+
 def _histogram_similarity(left: np.ndarray, right: np.ndarray) -> float:
     left_hist = cv2.calcHist([np.uint8(left * 255)], [0], None, [32], [0, 256])
     right_hist = cv2.calcHist([np.uint8(right * 255)], [0], None, [32], [0, 256])
     left_hist = cv2.normalize(left_hist, None).flatten()
     right_hist = cv2.normalize(right_hist, None).flatten()
     return float(cv2.compareHist(left_hist, right_hist, cv2.HISTCMP_CORREL))
+
+
+def _layout_diff(left: SelectedPage, right: SelectedPage) -> float:
+    left_layout = _layout_signature(left)
+    right_layout = _layout_signature(right)
+    return float(np.mean(np.abs(left_layout - right_layout)))
+
+
+def _profile_diff(left: SelectedPage, right: SelectedPage) -> float:
+    left_rows, left_cols = _projection_profile(left)
+    right_rows, right_cols = _projection_profile(right)
+    row_diff = float(np.mean(np.abs(left_rows - right_rows)))
+    col_diff = float(np.mean(np.abs(left_cols - right_cols)))
+    return (row_diff + col_diff) / 2.0
 
 
 def _page_quality_rank(page: SelectedPage) -> float:

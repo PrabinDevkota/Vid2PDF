@@ -16,6 +16,7 @@ from app.processing.deduper import remove_duplicates
 from app.processing.pipeline import PIPELINE_STAGES, build_export
 from app.processing.preview import attach_previews
 from app.processing.sampler import load_video_metadata, sample_frames
+from app.processing.sequence import collapse_sequence_candidates
 from app.processing.segmenter import detect_stable_segments
 from app.processing.selector import select_best_frames
 from app.processing.types import FrameQuality, SampledFrame, SelectedPage
@@ -227,15 +228,21 @@ class JobService:
 
             self._start_stage(job_id, "select_frames", "Selecting the strongest frame from each segment.", 50)
             selected_pages = select_best_frames(segments, processing_mode=processing_mode)
-            self._complete_stage(job_id, "select_frames", 66, f"Selected {len(selected_pages)} representative frames.")
+            sequence_pages = collapse_sequence_candidates(selected_pages)
+            self._complete_stage(
+                job_id,
+                "select_frames",
+                66,
+                f"Selected {len(selected_pages)} representative frames and collapsed them to {len(sequence_pages)} sequence-stable candidates.",
+            )
 
             self._start_stage(job_id, "remove_duplicates", "Filtering duplicate or weak pages.", 70)
             unique_pages = remove_duplicates(
-                selected_pages,
+                sequence_pages,
                 max_hamming_distance=mode_settings["dedupe_threshold"],
             )
-            if not unique_pages and selected_pages:
-                unique_pages = [selected_pages[0]]
+            if not unique_pages and sequence_pages:
+                unique_pages = [sequence_pages[0]]
             self._complete_stage(
                 job_id,
                 "remove_duplicates",
@@ -254,7 +261,7 @@ class JobService:
                     "Pages can now be reviewed, reordered, rotated, deleted, and exported through backend-backed state.",
                     f"Processed video at {metadata.fps:.2f} fps, {metadata.width}x{metadata.height}, duration {metadata.duration_seconds:.1f}s.",
                     f"Sampled {len(sampled_frames)} frames and detected {len(segments)} stable page segments.",
-                    f"Selected {len(selected_pages)} representative frames, removed {len(selected_pages) - len(preview_pages)} duplicates, and kept {len(preview_pages)} pages after deduplication.",
+                    f"Selected {len(selected_pages)} representative frames, collapsed to {len(sequence_pages)} sequence-stable candidates, removed {len(sequence_pages) - len(preview_pages)} duplicates, and kept {len(preview_pages)} pages after deduplication.",
                 ]
                 job.pages = [
                     Page(
@@ -449,6 +456,9 @@ class JobService:
             single_page_score=1.0,
             background_intrusion_ratio=0.0,
             border_touch_ratio=0.0,
+            contour_confidence=1.0,
+            gutter_ratio=0.0,
+            opposing_page_ratio=0.0,
             stability_score=1.0,
             rejected=False,
             rejection_reasons=[],

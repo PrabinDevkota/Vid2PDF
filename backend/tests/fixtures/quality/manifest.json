@@ -1,0 +1,31 @@
+{
+  "cases": [
+    {
+      "name": "book_turn_clean",
+      "input_path": "cases/book_turn_clean/sample.mp4",
+      "processing_mode": "camera",
+      "min_pages": 3,
+      "max_pages": 8,
+      "max_deleted_like_pages": 0,
+      "notes": "Mostly stable handheld page turns with one clean page per pause."
+    },
+    {
+      "name": "report_off_axis",
+      "input_path": "cases/report_off_axis/sample.mp4",
+      "processing_mode": "camera",
+      "min_pages": 2,
+      "max_pages": 6,
+      "max_deleted_like_pages": 1,
+      "notes": "Off-axis report capture with moderate perspective skew."
+    },
+    {
+      "name": "cluttered_desk",
+      "input_path": "cases/cluttered_desk/sample.mp4",
+      "processing_mode": "camera",
+      "min_pages": 1,
+      "max_pages": 5,
+      "max_deleted_like_pages": 1,
+      "notes": "Desk clutter and occasional hand intrusion should be rejected aggressively."
+    }
+  ]
+}

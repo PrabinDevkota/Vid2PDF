@@ -32,6 +32,9 @@ def compute_frame_quality(
     border_touch_ratio = detection.border_touch_ratio if detection else 0.0
     text_density = detection.text_density if detection else edge_density
     perspective_score = detection.perspective_score if detection else 1.0
+    contour_confidence = detection.contour_confidence if detection else 1.0
+    gutter_ratio = detection.gutter_ratio if detection else 0.0
+    opposing_page_ratio = detection.opposing_page_ratio if detection else 0.0
     stability_score = max(0.0, 1.0 - min(transition_penalty, 1.0))
     rejection_reasons: list[str] = []
 
@@ -60,6 +63,12 @@ def compute_frame_quality(
                 rejection_reasons.append("background_clutter")
             if border_touch_ratio > settings.quality_max_border_touch_ratio:
                 rejection_reasons.append("page_touches_frame_border")
+            if contour_confidence < settings.quality_min_contour_confidence:
+                rejection_reasons.append("weak_page_isolation")
+            if gutter_ratio > settings.quality_max_gutter_ratio:
+                rejection_reasons.append("gutter_dominant_spread")
+            if opposing_page_ratio > settings.quality_max_opposing_page_ratio:
+                rejection_reasons.append("opposing_page_visible")
             if not detection.normalized:
                 rejection_reasons.append("unstable_normalization")
 
@@ -73,10 +82,13 @@ def compute_frame_quality(
             + (rectangularity * 0.1)
             + (single_page_score * 0.12)
             + (perspective_score * 0.06)
+            + (contour_confidence * 0.07)
             + (stability_score * 0.11)
             - (occlusion_ratio * 0.28)
             - (background_intrusion_ratio * 0.26)
             - (border_touch_ratio * 0.18)
+            - (gutter_ratio * 0.26)
+            - (opposing_page_ratio * 0.3)
             - (transition_penalty * 0.5)
         )
     else:
@@ -111,6 +123,9 @@ def compute_frame_quality(
         single_page_score=single_page_score,
         background_intrusion_ratio=background_intrusion_ratio,
         border_touch_ratio=border_touch_ratio,
+        contour_confidence=contour_confidence,
+        gutter_ratio=gutter_ratio,
+        opposing_page_ratio=opposing_page_ratio,
         stability_score=stability_score,
         rejected=rejected,
         rejection_reasons=rejection_reasons,

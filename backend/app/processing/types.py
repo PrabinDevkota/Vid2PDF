@@ -28,6 +28,9 @@ class DocumentDetection:
     background_intrusion_ratio: float
     border_touch_ratio: float
     text_density: float
+    contour_confidence: float
+    gutter_ratio: float
+    opposing_page_ratio: float
     normalized: bool
 
 
@@ -49,6 +52,9 @@ class FrameQuality:
     single_page_score: float
     background_intrusion_ratio: float
     border_touch_ratio: float
+    contour_confidence: float
+    gutter_ratio: float
+    opposing_page_ratio: float
     stability_score: float
     rejected: bool
     rejection_reasons: list[str]

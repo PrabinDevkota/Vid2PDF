@@ -25,10 +25,18 @@ class Settings(BaseModel):
     quality_min_single_page_score: float = 0.58
     quality_max_background_intrusion: float = 0.18
     quality_max_border_touch_ratio: float = 0.16
+    quality_min_contour_confidence: float = 0.62
+    quality_max_gutter_ratio: float = 0.11
+    quality_max_opposing_page_ratio: float = 0.2
     quality_min_text_density: float = 0.012
     quality_sequence_duplicate_seconds: float = 2.4
     quality_duplicate_content_diff_threshold: float = 0.075
     quality_duplicate_histogram_threshold: float = 0.9
+    quality_sequence_cluster_window_seconds: float = 1.8
+    quality_sequence_bad_neighbor_penalty: float = 0.18
+    quality_sequence_min_cluster_similarity: float = 0.9
+    quality_duplicate_layout_diff_threshold: float = 0.09
+    quality_duplicate_profile_diff_threshold: float = 0.08
     public_artifact_base_url: str = "/artifacts"
 
 
