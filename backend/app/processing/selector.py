@@ -8,7 +8,15 @@ def select_best_frames(
     selected_pages: list[SelectedPage] = []
 
     for index, segment in enumerate(segments, start=1):
-        best_frame = max(segment.candidate_frames, key=lambda frame: _frame_selection_score(frame, segment, processing_mode))
+        accepted_frames = [frame for frame in segment.candidate_frames if not frame.quality.rejected]
+        candidate_pool = accepted_frames if accepted_frames else segment.candidate_frames
+        if not candidate_pool:
+            continue
+
+        best_frame = max(
+            candidate_pool,
+            key=lambda frame: _frame_selection_score(frame, segment, processing_mode),
+        )
         selected_pages.append(
             SelectedPage(
                 page_id=f"page-{index}",
@@ -32,24 +40,27 @@ def select_best_frames(
 
 def _frame_selection_score(frame, segment: StableSegment, processing_mode: ProcessingMode) -> float:
     base_score = frame.quality.score
-    if processing_mode != "camera":
-        return base_score
-
     segment_midpoint = (segment.start_time + segment.end_time) / 2.0
     segment_duration = max(segment.end_time - segment.start_time, 0.001)
     distance_from_middle = abs(frame.timestamp - segment_midpoint) / segment_duration
-    middle_bonus = max(0.0, 1.0 - (distance_from_middle * 2.0)) * 0.18
-    stability_bonus = max(0.0, 1.0 - frame.change_ratio) * 0.15
-    coverage_bonus = frame.quality.page_coverage * 0.16
-    rectangularity_bonus = frame.quality.rectangularity * 0.12
-    occlusion_penalty = frame.quality.occlusion_ratio * 0.35
-    transition_penalty = frame.quality.transition_penalty * 0.45
-    return (
-        base_score
-        + middle_bonus
-        + stability_bonus
-        + coverage_bonus
-        + rectangularity_bonus
-        - occlusion_penalty
-        - transition_penalty
+    middle_bonus = max(0.0, 1.0 - (distance_from_middle * 2.0)) * 0.12
+    stability_bonus = max(0.0, 1.0 - frame.change_ratio) * 0.16
+    readability_bonus = frame.quality.readability_score * 0.18
+    text_bonus = min(frame.quality.text_density * 10.0, 0.18)
+    rejection_penalty = 0.65 if frame.quality.rejected else 0.0
+
+    score = base_score + middle_bonus + stability_bonus + readability_bonus + text_bonus - rejection_penalty
+    if processing_mode != "camera":
+        return score
+
+    score += (
+        (frame.quality.page_coverage * 0.14)
+        + (frame.quality.rectangularity * 0.08)
+        + (frame.quality.single_page_score * 0.2)
+        + (frame.quality.stability_score * 0.18)
+        - (frame.quality.occlusion_ratio * 0.42)
+        - (frame.quality.background_intrusion_ratio * 0.44)
+        - (frame.quality.border_touch_ratio * 0.25)
+        - (frame.quality.transition_penalty * 0.55)
     )
+    return score

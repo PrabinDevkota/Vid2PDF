@@ -28,6 +28,7 @@ def attach_previews(
             continue
         if context.processing_mode == "camera":
             output_image = normalize_final_page(output_image)
+        page.selected_frame.image = output_image
 
         cv2.imwrite(str(image_path), output_image)
         thumbnail_image = _build_thumbnail(output_image)

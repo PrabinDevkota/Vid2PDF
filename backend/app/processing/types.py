@@ -24,6 +24,11 @@ class DocumentDetection:
     rectangularity: float
     occlusion_ratio: float
     perspective_score: float
+    single_page_score: float
+    background_intrusion_ratio: float
+    border_touch_ratio: float
+    text_density: float
+    normalized: bool
 
 
 @dataclass
@@ -37,6 +42,16 @@ class FrameQuality:
     occlusion_ratio: float
     transition_penalty: float
     readability_score: float
+    sharpness_score: float
+    contrast_score: float
+    brightness_score: float
+    text_density: float
+    single_page_score: float
+    background_intrusion_ratio: float
+    border_touch_ratio: float
+    stability_score: float
+    rejected: bool
+    rejection_reasons: list[str]
     score: float
     perceptual_hash: str
 

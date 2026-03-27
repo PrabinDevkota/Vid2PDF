@@ -147,6 +147,12 @@ def _build_segment(
     else:
         candidate_frames = frames
 
+    accepted_frames = [frame for frame in candidate_frames if not frame.quality.rejected]
+    if accepted_frames:
+        candidate_frames = accepted_frames
+    elif all(frame.quality.rejected for frame in frames):
+        return None
+
     mean_change_ratio = float(np.mean([frame.change_ratio for frame in frames])) if frames else 0.0
     return StableSegment(
         segment_id=f"segment-{segment_number}",

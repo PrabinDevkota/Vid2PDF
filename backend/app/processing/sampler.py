@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import cv2
+import numpy as np
 
 from app.processing.document import detect_document_region
 from app.processing.scoring import compute_frame_quality
@@ -46,6 +47,7 @@ def sample_frames(
     sampled_frames: list[SampledFrame] = []
     frame_index = 0
     previous_detection = None
+    previous_processed_frame = None
 
     while True:
         success, frame = capture.read()
@@ -57,10 +59,12 @@ def sample_frames(
                 detection = detect_document_region(frame)
                 processed_frame = detection.corrected_image
                 transition_penalty = (
-                    (0.25 if not detection.found else 0.0)
-                    + max(0.0, 0.25 - detection.page_coverage)
-                    + max(0.0, 0.2 - detection.rectangularity)
-                    + (detection.occlusion_ratio * 0.9)
+                    (0.35 if not detection.found else 0.0)
+                    + max(0.0, 0.42 - detection.page_coverage)
+                    + max(0.0, 0.58 - detection.single_page_score)
+                    + max(0.0, detection.background_intrusion_ratio - 0.08) * 1.2
+                    + max(0.0, detection.border_touch_ratio - 0.05) * 0.8
+                    + (detection.occlusion_ratio * 1.1)
                 )
                 if previous_detection is not None:
                     transition_penalty += _camera_stability_penalty(previous_detection, detection)
@@ -68,6 +72,8 @@ def sample_frames(
                 detection = None
                 processed_frame = frame
                 transition_penalty = 0.0
+            if previous_processed_frame is not None:
+                transition_penalty += _frame_transition_penalty(previous_processed_frame, processed_frame)
 
             quality = compute_frame_quality(
                 processed_frame,
@@ -85,6 +91,7 @@ def sample_frames(
                 )
             )
             previous_detection = detection
+            previous_processed_frame = processed_frame
         frame_index += 1
 
     capture.release()
@@ -100,15 +107,31 @@ def sample_frames(
 
 def _camera_stability_penalty(previous_detection, current_detection) -> float:
     if not previous_detection.found or not current_detection.found:
-        return 0.18
+        return 0.22
 
     coverage_delta = abs(current_detection.page_coverage - previous_detection.page_coverage)
     rectangularity_delta = abs(current_detection.rectangularity - previous_detection.rectangularity)
     perspective_delta = abs(
         current_detection.perspective_score - previous_detection.perspective_score
     )
+    single_page_delta = abs(current_detection.single_page_score - previous_detection.single_page_score)
+    border_touch_delta = abs(current_detection.border_touch_ratio - previous_detection.border_touch_ratio)
     return (
-        min(coverage_delta * 1.8, 0.28)
-        + min(rectangularity_delta * 0.9, 0.16)
-        + min(perspective_delta * 0.75, 0.14)
+        min(coverage_delta * 2.0, 0.32)
+        + min(rectangularity_delta * 1.0, 0.18)
+        + min(perspective_delta * 0.8, 0.14)
+        + min(single_page_delta * 0.9, 0.18)
+        + min(border_touch_delta * 0.7, 0.12)
     )
+
+
+def _frame_transition_penalty(previous_frame: np.ndarray, current_frame: np.ndarray) -> float:
+    prev_gray = cv2.cvtColor(previous_frame, cv2.COLOR_BGR2GRAY)
+    curr_gray = cv2.cvtColor(current_frame, cv2.COLOR_BGR2GRAY)
+    prev_small = cv2.resize(prev_gray, (224, 224), interpolation=cv2.INTER_AREA)
+    curr_small = cv2.resize(curr_gray, (224, 224), interpolation=cv2.INTER_AREA)
+    diff = cv2.absdiff(prev_small, curr_small)
+    mean_diff = float(np.mean(diff) / 255.0)
+    _, threshold = cv2.threshold(diff, 22, 255, cv2.THRESH_BINARY)
+    moving_ratio = float(np.mean(threshold > 0))
+    return min((moving_ratio * 0.85) + (mean_diff * 0.6), 0.65)

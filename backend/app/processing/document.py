@@ -5,6 +5,8 @@ import numpy as np
 
 from app.processing.types import DocumentDetection
 
+EXPECTED_PAGE_ASPECT_RATIO = 0.72
+
 
 def detect_document_region(frame: np.ndarray) -> DocumentDetection:
     height, width = frame.shape[:2]
@@ -16,6 +18,8 @@ def detect_document_region(frame: np.ndarray) -> DocumentDetection:
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     best_contour = None
     best_score = 0.0
+    best_metrics = None
+    competing_score = 0.0
 
     for contour in contours:
         area = cv2.contourArea(contour)
@@ -30,10 +34,35 @@ def detect_document_region(frame: np.ndarray) -> DocumentDetection:
         bounding_x, bounding_y, bounding_w, bounding_h = cv2.boundingRect(approximation)
         bounding_area = max(bounding_w * bounding_h, 1)
         rectangularity = float(area / bounding_area)
-        score = (area / (width * height)) * 0.75 + rectangularity * 0.25
+        page_coverage = float(area / (width * height))
+        border_touch_ratio = _border_touch_ratio(
+            bounding_x,
+            bounding_y,
+            bounding_w,
+            bounding_h,
+            width,
+            height,
+        )
+        aspect_ratio = bounding_w / max(bounding_h, 1)
+        single_page_score = _single_page_shape_score(aspect_ratio, border_touch_ratio)
+        score = (
+            (page_coverage * 0.45)
+            + (rectangularity * 0.25)
+            + (single_page_score * 0.2)
+            + ((1.0 - border_touch_ratio) * 0.1)
+        )
         if score > best_score:
+            competing_score = best_score
             best_score = score
             best_contour = approximation
+            best_metrics = (
+                page_coverage,
+                rectangularity,
+                border_touch_ratio,
+                single_page_score,
+            )
+        elif score > competing_score:
+            competing_score = score
 
     if best_contour is None:
         return DocumentDetection(
@@ -44,16 +73,28 @@ def detect_document_region(frame: np.ndarray) -> DocumentDetection:
             rectangularity=0.0,
             occlusion_ratio=_estimate_occlusion(frame),
             perspective_score=0.0,
+            single_page_score=0.0,
+            background_intrusion_ratio=1.0,
+            border_touch_ratio=1.0,
+            text_density=_text_density(frame),
+            normalized=False,
         )
 
     ordered_corners = _order_points(best_contour.reshape(4, 2).astype("float32"))
     corrected = crop_document_image(_warp_document(frame, ordered_corners))
-    page_coverage = float(cv2.contourArea(best_contour) / (width * height))
-    bounding_x, bounding_y, bounding_w, bounding_h = cv2.boundingRect(best_contour)
-    rectangularity = float(
-        cv2.contourArea(best_contour) / max(bounding_w * bounding_h, 1)
-    )
+    page_coverage, rectangularity, border_touch_ratio, single_page_score = best_metrics
     perspective_score = _perspective_score(ordered_corners)
+    background_intrusion_ratio = _background_intrusion_ratio(corrected)
+    text_density = _text_density(corrected)
+    competing_penalty = min(competing_score / max(best_score, 0.001), 1.0)
+    single_page_score = max(single_page_score - (competing_penalty * 0.35), 0.0)
+    normalized = (
+        page_coverage >= 0.42
+        and rectangularity >= 0.62
+        and border_touch_ratio <= 0.18
+        and background_intrusion_ratio <= 0.2
+        and single_page_score >= 0.58
+    )
 
     return DocumentDetection(
         found=True,
@@ -63,6 +104,11 @@ def detect_document_region(frame: np.ndarray) -> DocumentDetection:
         rectangularity=rectangularity,
         occlusion_ratio=_estimate_occlusion(corrected),
         perspective_score=perspective_score,
+        single_page_score=single_page_score,
+        background_intrusion_ratio=background_intrusion_ratio,
+        border_touch_ratio=border_touch_ratio,
+        text_density=text_density,
+        normalized=normalized,
     )
 
 
@@ -190,6 +236,51 @@ def _estimate_occlusion(image: np.ndarray) -> float:
     upper_skin = np.array([25, 180, 255], dtype=np.uint8)
     mask = cv2.inRange(hsv, lower_skin, upper_skin)
     return float(np.mean(mask > 0))
+
+
+def _background_intrusion_ratio(image: np.ndarray) -> float:
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    mask = _build_fallback_mask(gray)
+    if not np.any(mask):
+        return 1.0
+
+    inverse = mask == 0
+    border = np.zeros_like(mask, dtype=bool)
+    border[:12, :] = True
+    border[-12:, :] = True
+    border[:, :12] = True
+    border[:, -12:] = True
+    return float(np.mean(inverse & border))
+
+
+def _text_density(image: np.ndarray) -> float:
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 60, 160)
+    return float(np.mean(edges > 0))
+
+
+def _border_touch_ratio(
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+    image_width: int,
+    image_height: int,
+) -> float:
+    margin_x = max(int(image_width * 0.04), 8)
+    margin_y = max(int(image_height * 0.04), 8)
+    touches = 0
+    touches += int(x <= margin_x)
+    touches += int(y <= margin_y)
+    touches += int((x + w) >= image_width - margin_x)
+    touches += int((y + h) >= image_height - margin_y)
+    return touches / 4.0
+
+
+def _single_page_shape_score(aspect_ratio: float, border_touch_ratio: float) -> float:
+    aspect_penalty = min(abs(aspect_ratio - EXPECTED_PAGE_ASPECT_RATIO) / 0.38, 1.0)
+    wide_spread_penalty = max(0.0, (aspect_ratio - 0.92) / 0.35)
+    return max(0.0, 1.0 - (aspect_penalty * 0.65) - (wide_spread_penalty * 0.6) - (border_touch_ratio * 0.45))
 
 
 def _flatten_background(gray: np.ndarray) -> np.ndarray:
