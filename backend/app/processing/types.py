@@ -105,5 +105,7 @@ class PipelineContext:
     job_root: str
     page_dir: str
     thumbnail_dir: str
+    debug_dir: str
+    debug_report_path: str
     artifact_base_url: str
     processing_mode: ProcessingMode

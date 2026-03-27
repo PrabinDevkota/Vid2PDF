@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from app.core.settings import settings
 from app.processing.context import build_pipeline_context
 from app.processing.deduper import remove_duplicates
+from app.processing.debug import write_pipeline_debug_report
 from app.processing.exporter import ExportArtifact, export_pdf
 from app.processing.preview import attach_previews
 from app.processing.sampler import load_video_metadata, sample_frames
@@ -79,6 +80,14 @@ def run_reconstruction_pipeline(
     if not unique_pages and sequence_pages:
         unique_pages = [sequence_pages[0]]
     preview_pages = attach_previews(unique_pages, context=context)
+    write_pipeline_debug_report(
+        context=context,
+        sampled_frames=sampled_frames,
+        segments=segments,
+        selected_pages=selected_pages,
+        sequence_pages=sequence_pages,
+        deduped_pages=preview_pages,
+    )
 
     logger.info(
         "Pipeline finished for job=%s: sampled_frames=%s, segments=%s, selected_pages=%s, deduped_pages=%s",

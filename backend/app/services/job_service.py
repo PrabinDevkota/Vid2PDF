@@ -13,6 +13,7 @@ from app.core.settings import settings
 from app.models.job import ExportArtifact, Job, Page, ProcessingMode, Progress, Stage
 from app.processing.context import build_pipeline_context
 from app.processing.deduper import remove_duplicates
+from app.processing.debug import write_pipeline_debug_report
 from app.processing.pipeline import PIPELINE_STAGES, build_export
 from app.processing.preview import attach_previews
 from app.processing.sampler import load_video_metadata, sample_frames
@@ -253,6 +254,14 @@ class JobService:
             self._start_stage(job_id, "prepare_previews", "Writing page previews and final page images.", 86)
             preview_pages = attach_previews(unique_pages, context=context)
             self._complete_stage(job_id, "prepare_previews", 96, "Preview artifacts written.")
+            write_pipeline_debug_report(
+                context=context,
+                sampled_frames=sampled_frames,
+                segments=segments,
+                selected_pages=selected_pages,
+                sequence_pages=sequence_pages,
+                deduped_pages=preview_pages,
+            )
 
             with self._lock:
                 job = self._jobs[job_id]

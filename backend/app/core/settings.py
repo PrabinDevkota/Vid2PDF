@@ -37,6 +37,9 @@ class Settings(BaseModel):
     quality_sequence_min_cluster_similarity: float = 0.9
     quality_duplicate_layout_diff_threshold: float = 0.09
     quality_duplicate_profile_diff_threshold: float = 0.08
+    quality_debug_artifacts_enabled: bool = True
+    quality_debug_max_rejected_frames: int = 12
+    quality_debug_max_kept_pages: int = 12
     public_artifact_base_url: str = "/artifacts"
 
 

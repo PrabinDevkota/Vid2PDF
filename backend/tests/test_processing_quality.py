@@ -5,6 +5,7 @@ import numpy as np
 
 from app.processing.preview import attach_previews
 from app.processing.document import detect_document_region
+from app.processing.debug import write_pipeline_debug_report
 from app.processing.scoring import compute_frame_quality
 from app.processing.deduper import remove_duplicates
 from app.processing.selector import select_best_frames
@@ -291,6 +292,8 @@ def test_attach_previews_uses_normalized_selected_candidate_consistently(tmp_pat
         job_root=str(tmp_path / "job-quality"),
         page_dir=str(tmp_path / "job-quality" / "pages"),
         thumbnail_dir=str(tmp_path / "job-quality" / "thumbnails"),
+        debug_dir=str(tmp_path / "job-quality" / "debug"),
+        debug_report_path=str(tmp_path / "job-quality" / "debug" / "pipeline_report.json"),
         artifact_base_url="/artifacts",
         processing_mode="camera",
     )
@@ -314,6 +317,49 @@ def test_attach_previews_uses_normalized_selected_candidate_consistently(tmp_pat
     assert page.selected_frame.image is not None
     assert written.shape == page.selected_frame.image.shape
     assert np.array_equal(written, page.selected_frame.image)
+
+
+def test_pipeline_debug_report_writes_json_and_images(tmp_path: Path) -> None:
+    context = PipelineContext(
+        job_id="job-debug",
+        upload_path="video.mp4",
+        job_root=str(tmp_path / "job-debug"),
+        page_dir=str(tmp_path / "job-debug" / "pages"),
+        thumbnail_dir=str(tmp_path / "job-debug" / "thumbnails"),
+        debug_dir=str(tmp_path / "job-debug" / "debug"),
+        debug_report_path=str(tmp_path / "job-debug" / "debug" / "pipeline_report.json"),
+        artifact_base_url="/artifacts",
+        processing_mode="camera",
+    )
+    rejected = _make_sampled_frame(3, 0.8, 0.3, rejected=True, transition_penalty=0.4)
+    kept_page = SelectedPage(
+        page_id="page-1",
+        page_number=1,
+        label="Page 1",
+        source_segment_id="segment-1",
+        segment_start=0.0,
+        segment_end=1.0,
+        selected_frame=_make_sampled_frame(4, 1.0, 0.92),
+        image_path="",
+        thumbnail_path="",
+    )
+
+    write_pipeline_debug_report(
+        context=context,
+        sampled_frames=[rejected, kept_page.selected_frame],
+        segments=[],
+        selected_pages=[kept_page],
+        sequence_pages=[kept_page],
+        deduped_pages=[kept_page],
+    )
+
+    report_path = Path(context.debug_report_path)
+    debug_dir = Path(context.debug_dir)
+
+    assert report_path.exists()
+    assert "rejected_frames" in report_path.read_text(encoding="utf-8")
+    assert any(path.name.startswith("rejected-") for path in debug_dir.iterdir())
+    assert any(path.name.startswith("kept-") for path in debug_dir.iterdir())
 
 
 def test_sequence_filter_collapses_repeated_turn_moment_captures() -> None:
