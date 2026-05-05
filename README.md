@@ -52,7 +52,7 @@ The backend uses FastAPI and is organized around a reconstruction pipeline:
 
 ### Processing pipeline
 
-Pipeline stages live in `backend/app/processing/`:
+Pipeline stages live in `backend/app/processing/`
 
 - `sampler.py`: frame sampling
 - `segmenter.py`: stable segment detection
@@ -123,3 +123,5 @@ npm run dev
 3. Add frame quality scoring and best-frame selection heuristics.
 4. Persist preview assets and edited page state.
 5. Generate the final PDF from reviewed pages.
+
+Other works on progress...

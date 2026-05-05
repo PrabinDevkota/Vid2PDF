@@ -15,6 +15,7 @@ class Progress:
     message: str = "Waiting to start."
 
 
+
 @dataclass
 class Stage:
     key: str
@@ -54,6 +55,7 @@ class ExportArtifact:
     requested_at: datetime | None = None
     completed_at: datetime | None = None
     error: str | None = None
+
 
 
 @dataclass
