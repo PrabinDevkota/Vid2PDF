@@ -228,7 +228,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
       actions={
         job ? (
           <div className="review-actions">
-            <button className="secondary-button" type="button">
+            <button className="secondary-button secondary-button--quiet" type="button">
               {visiblePages.length} reviewable pages
             </button>
             <button
@@ -245,8 +245,9 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
     >
       {!job ? (
         <div className="empty-state empty-state--large">
-          <strong>No review session selected</strong>
-          <p>Choose a processing session to inspect extracted pages and prepare the final document.</p>
+          <span className="empty-state__icon empty-state__icon--large" aria-hidden="true" />
+          <strong>Select a session to review pages</strong>
+          <p>Extracted pages will appear here for rotation, deletion, reordering, and export.</p>
         </div>
       ) : (
         <div className="review-board">
@@ -271,6 +272,45 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                 </div>
                 <span>{job.progress.percent}% complete</span>
               </div>
+            </div>
+            <div className="export-panel">
+              <div>
+                <span className="review-summary-card__eyebrow">Export</span>
+                <h3>PDF output</h3>
+                <p className="muted">
+                  {job.export.status === "ready"
+                    ? "A PDF artifact is available for this session."
+                    : job.export.status === "processing"
+                      ? "The backend is preparing the PDF artifact."
+                      : "Export when the reviewed page set is ready."}
+                </p>
+              </div>
+              <div className="export-panel__status">
+                <span className={`status-pill status-pill--${job.export.status}`}>
+                  {job.export.status === "idle" ? "not exported" : job.export.status}
+                </span>
+                {job.export.status === "processing" ? (
+                  <span>{job.export.progressPercent}%</span>
+                ) : null}
+              </div>
+              <button
+                className="primary-button"
+                disabled={job.status !== "ready" || job.export.status === "processing" || isMutating}
+                onClick={() => void handleExport()}
+                type="button"
+              >
+                {job.export.status === "processing" ? "Exporting..." : "Export PDF"}
+              </button>
+              {exportDownloadUrl ? (
+                <a
+                  className="download-link"
+                  href={exportDownloadUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Download latest PDF
+                </a>
+              ) : null}
             </div>
             <div className="review-metrics">
               <div className="review-metric">
@@ -412,7 +452,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
           <div className="review-toolbar">
             <div className="review-toolbar__group">
               <button
-                className="secondary-button"
+                className="secondary-button danger-button"
                 disabled={isMutating || visiblePages.length === 0}
                 onClick={() => void handleBulkDelete()}
                 type="button"
@@ -487,6 +527,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
             </div>
           ) : visiblePages.length === 0 ? (
             <div className="empty-state empty-state--large">
+              <span className="empty-state__icon empty-state__icon--large" aria-hidden="true" />
               <strong>No active pages available</strong>
               <p>Restore or keep more pages during review before exporting the final PDF.</p>
             </div>
@@ -573,14 +614,14 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                       onClick={() => void handleShift(page.id, -1)}
                       type="button"
                     >
-                      Move up
+                      Up
                     </button>
                     <button
                       disabled={isMutating || index === visiblePages.length - 1}
                       onClick={() => void handleShift(page.id, 1)}
                       type="button"
                     >
-                      Move down
+                      Down
                     </button>
                     <button
                       disabled={isMutating}
@@ -590,6 +631,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                       Rotate
                     </button>
                     <button
+                      className="danger-button"
                       disabled={isMutating}
                       onClick={() => void handleDelete(page.id, true)}
                       type="button"
