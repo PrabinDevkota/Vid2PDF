@@ -1,5 +1,5 @@
-import type { ProcessingJob } from "../../types";
 import { SectionCard } from "../../components/SectionCard";
+import type { ProcessingJob } from "../../types";
 
 interface JobOverviewProps {
   jobs: ProcessingJob[];
@@ -14,46 +14,67 @@ export function JobOverview({
   isLoading,
   onSelectJob,
 }: JobOverviewProps) {
+  function formatDate(value: string) {
+    return new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(new Date(value));
+  }
+
   return (
     <SectionCard
       eyebrow="Sessions"
       title="Sessions"
-      subtitle="Each upload creates its own backend-backed reconstruction run and review set."
+      subtitle="Recent reconstruction runs and review sets."
     >
       {isLoading ? (
-        <div className="empty-state">
-          <strong>Loading sessions</strong>
-          <p>Reading the current reconstruction workspace.</p>
+        <div className="skeleton-list" aria-label="Loading sessions">
+          <span />
+          <span />
+          <span />
         </div>
       ) : jobs.length === 0 ? (
-        <div className="empty-state">
+        <div className="empty-state empty-state--compact">
+          <span className="empty-state__icon" aria-hidden="true" />
           <strong>No sessions yet</strong>
-          <p>Upload your first recording to start building a reviewable page set.</p>
+          <p>Upload your first document-viewing video to start building a PDF.</p>
+          <span className="empty-state__cta">Create session above</span>
         </div>
       ) : (
         <div className="job-list">
-          {jobs.map((job) => (
-            <button
-              key={job.id}
-              className={`job-tile ${activeJob?.id === job.id ? "active" : ""}`}
-              onClick={() => onSelectJob(job.id)}
-              type="button"
-            >
-              <div className="job-tile__head">
-                <span className="job-tile__title">{job.filename}</span>
-                <span className={`job-status job-status--${job.status}`}>{job.status}</span>
-              </div>
-              <div className="job-tile__meta-row">
-                <span className="job-tile__meta">{job.pages.length} extracted pages</span>
-                <span className="job-tile__meta">
-                  {job.processingMode === "camera" ? "Camera / physical pages" : "Screen recording"}
-                </span>
-              </div>
-              <span className="job-tile__meta">
-                Created {new Date(job.createdAt).toLocaleDateString()}
-              </span>
-            </button>
-          ))}
+          {jobs.map((job) => {
+            const activePageCount = job.pages.filter((page) => !page.deleted).length;
+            return (
+              <button
+                key={job.id}
+                className={`job-tile ${activeJob?.id === job.id ? "active" : ""}`}
+                onClick={() => onSelectJob(job.id)}
+                type="button"
+              >
+                <div className="job-tile__head">
+                  <span className="job-tile__title" title={job.filename}>
+                    {job.filename}
+                  </span>
+                  <span className={`status-pill status-pill--${job.status}`}>{job.status}</span>
+                </div>
+                <div className="job-tile__meta-row">
+                  <span className="mode-badge">
+                    {job.processingMode === "camera" ? "Camera" : "Screen"}
+                  </span>
+                  <span className={`status-pill status-pill--${job.export.status}`}>
+                    {job.export.status === "idle" ? "not exported" : job.export.status}
+                  </span>
+                </div>
+                <div className="job-tile__detail-grid">
+                  <span>{activePageCount} pages</span>
+                  <span>Updated {formatDate(job.updatedAt)}</span>
+                  <span>Created {formatDate(job.createdAt)}</span>
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
     </SectionCard>
