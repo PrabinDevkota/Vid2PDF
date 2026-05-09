@@ -11,4 +11,4 @@ backend/data/
 frontend/.env
 backend/.env
 *.mp4
-
+backend/backend/data
