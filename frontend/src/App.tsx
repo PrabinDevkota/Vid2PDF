@@ -1,29 +1,235 @@
 import { useEffect, useMemo, useState } from "react";
+import { SectionCard } from "./components/SectionCard";
 import { UploadPanel } from "./features/jobs/UploadPanel";
 import { JobOverview } from "./features/jobs/JobOverview";
 import { PageReviewBoard } from "./features/pages/PageReviewBoard";
-import { SectionCard } from "./components/SectionCard";
 import { fetchJob, fetchJobs } from "./lib/api";
-import type { ProcessingJob } from "./types";
+import type { ProcessingJob, StageStatus } from "./types";
+
+const navItems = ["Dashboard", "Sessions", "Review", "Exports", "Settings"];
 
 const pipelineSteps = [
-  {
-    title: "Detect page turns",
-    description: "Spot transitions between viewed pages instead of collecting arbitrary frames.",
-  },
-  {
-    title: "Lock stable segments",
-    description: "Keep only the moments where a page is fully visible and steady on screen.",
-  },
-  {
-    title: "Pick the best frame",
-    description: "Select the cleanest candidate from each segment for a sharper final document.",
-  },
-  {
-    title: "Review before export",
-    description: "Inspect previews, remove weak pages, reorder, rotate, and export a clean PDF.",
-  },
+  { key: "upload", label: "Upload" },
+  { key: "stable_segments", label: "Detect stable segments" },
+  { key: "best_frames", label: "Select best frames" },
+  { key: "dedupe", label: "Remove duplicates" },
+  { key: "review", label: "Review pages" },
+  { key: "export", label: "Export PDF" },
 ];
+
+function formatCount(value: number, label: string) {
+  return `${value} ${label}${value === 1 ? "" : "s"}`;
+}
+
+function mapStepStatus(job: ProcessingJob | null, stepKey: string): StageStatus {
+  if (!job) {
+    return "pending";
+  }
+
+  if (stepKey === "upload") {
+    return job.status === "failed" ? "failed" : "complete";
+  }
+
+  if (stepKey === "review") {
+    if (job.status === "failed") {
+      return "failed";
+    }
+    if (job.status === "ready") {
+      return "processing";
+    }
+    return "pending";
+  }
+
+  if (stepKey === "export") {
+    if (job.export.status === "failed") {
+      return "failed";
+    }
+    if (job.export.status === "ready") {
+      return "complete";
+    }
+    if (job.export.status === "processing") {
+      return "processing";
+    }
+    return job.status === "ready" ? "pending" : "pending";
+  }
+
+  const matchingStage = job.stages.find((stage) => {
+    const key = stage.key.toLowerCase();
+    return (
+      key.includes(stepKey) ||
+      (stepKey === "stable_segments" && (key.includes("segment") || key.includes("detect"))) ||
+      (stepKey === "best_frames" && (key.includes("frame") || key.includes("select"))) ||
+      (stepKey === "dedupe" && (key.includes("dedupe") || key.includes("duplicate")))
+    );
+  });
+
+  if (matchingStage) {
+    return matchingStage.status;
+  }
+
+  if (job.status === "ready") {
+    return "complete";
+  }
+
+  return job.currentStageKey ? "pending" : "pending";
+}
+
+function Sidebar() {
+  return (
+    <aside className="sidebar">
+      <div className="brand-lockup">
+        <div className="brand-mark">V2</div>
+        <div>
+          <strong>Vid2PDF</strong>
+          <span>Reconstruction studio</span>
+        </div>
+      </div>
+      <nav className="sidebar-nav" aria-label="Workspace navigation">
+        {navItems.map((item, index) => (
+          <button className={`nav-item ${index === 0 ? "active" : ""}`} key={item} type="button">
+            <span className="nav-item__icon" aria-hidden="true" />
+            {item}
+          </button>
+        ))}
+      </nav>
+      <div className="sidebar-status">
+        <span className="live-dot" />
+        <div>
+          <strong>Processing engine active</strong>
+          <p>Local MVP workspace</p>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function StatPill({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="stat-pill">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function Topbar({
+  exportsReady,
+  jobsCount,
+  readyJobs,
+  totalPages,
+}: {
+  exportsReady: number;
+  jobsCount: number;
+  readyJobs: number;
+  totalPages: number;
+}) {
+  return (
+    <header className="workspace-topbar">
+      <div>
+        <p className="workspace-kicker">Vid2PDF workspace</p>
+        <h1>Document reconstruction</h1>
+        <p>Convert page-viewing videos into clean, reviewable PDFs.</p>
+      </div>
+      <div className="topbar-stats">
+        <StatPill label="Sessions" value={jobsCount} />
+        <StatPill label="Pages" value={totalPages} />
+        <StatPill label="Ready" value={readyJobs} />
+        <StatPill label="Exports" value={exportsReady} />
+      </div>
+    </header>
+  );
+}
+
+function PipelineStepper({ job }: { job: ProcessingJob | null }) {
+  return (
+    <SectionCard
+      eyebrow="Pipeline"
+      title="Reconstruction pipeline"
+      subtitle="Stable segments, best-frame selection, deduplication, review, export."
+    >
+      <div className="pipeline-stepper">
+        {pipelineSteps.map((step, index) => {
+          const status = mapStepStatus(job, step.key);
+          return (
+            <div className={`pipeline-step pipeline-step--${status}`} key={step.key}>
+              <div className="pipeline-step__marker">{index + 1}</div>
+              <div>
+                <strong>{step.label}</strong>
+                <span>{status}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </SectionCard>
+  );
+}
+
+function ProcessingStatusCard({
+  activeJob,
+  loadError,
+}: {
+  activeJob: ProcessingJob | null;
+  loadError: string | null;
+}) {
+  return (
+    <SectionCard
+      eyebrow="Status"
+      title="Processing status"
+      subtitle="Live state from the active backend job."
+    >
+      {loadError ? (
+        <div className="status-banner status-banner--error">
+          <strong>Workspace sync needs attention.</strong>
+          <span>{loadError}</span>
+        </div>
+      ) : !activeJob ? (
+        <div className="empty-state empty-state--compact">
+          <span className="empty-state__icon" aria-hidden="true" />
+          <strong>No active session</strong>
+          <p>Upload a page-viewing video or select a session to inspect progress.</p>
+        </div>
+      ) : (
+        <div className="processing-card">
+          <div className="processing-card__header">
+            <div>
+              <span className={`status-pill status-pill--${activeJob.status}`}>
+                {activeJob.status}
+              </span>
+              <h3>{activeJob.filename}</h3>
+            </div>
+            <strong>{activeJob.progress.percent}%</strong>
+          </div>
+          <div className="progress-block">
+            <div className="progress-block__track">
+              <div
+                className="progress-block__fill"
+                style={{ width: `${activeJob.progress.percent}%` }}
+              />
+            </div>
+            <span>{activeJob.progress.message}</span>
+          </div>
+          <div className="processing-meta-grid">
+            <div>
+              <span>Mode</span>
+              <strong>
+                {activeJob.processingMode === "camera" ? "Camera pages" : "Screen recording"}
+              </strong>
+            </div>
+            <div>
+              <span>Pages</span>
+              <strong>{activeJob.pages.filter((page) => !page.deleted).length}</strong>
+            </div>
+            <div>
+              <span>Export</span>
+              <strong>{activeJob.export.status}</strong>
+            </div>
+          </div>
+        </div>
+      )}
+    </SectionCard>
+  );
+}
 
 export default function App() {
   const [jobs, setJobs] = useState<ProcessingJob[]>([]);
@@ -119,6 +325,7 @@ export default function App() {
     0,
   );
   const readyJobs = jobs.filter((job) => job.status === "ready").length;
+  const exportsReady = jobs.filter((job) => job.export.status === "ready").length;
 
   function upsertJob(updatedJob: ProcessingJob) {
     setJobs((currentJobs) => {
@@ -134,103 +341,39 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <header className="hero">
-        <div className="hero__content">
-          <div className="hero-topbar">
-            <div className="hero-badge-row">
-              <p className="hero__eyebrow">Vid2PDF</p>
-              <span className="hero-badge">Document reconstruction workspace</span>
-            </div>
-            <div className="hero-mini-stats">
-              <span>{jobs.length} sessions</span>
-              <span>{totalPages} pages</span>
-              <span>{readyJobs} ready</span>
-            </div>
+      <Sidebar />
+      <main className="workspace">
+        <Topbar
+          exportsReady={exportsReady}
+          jobsCount={jobs.length}
+          readyJobs={readyJobs}
+          totalPages={totalPages}
+        />
+        <section className="dashboard-grid" aria-label="Document reconstruction dashboard">
+          <div className="dashboard-grid__upload">
+            <UploadPanel onJobCreated={upsertJob} />
           </div>
-          <h1>Turn document-viewing videos into reviewable, export-ready PDFs.</h1>
-          <p className="hero__copy">
-            Built for reports, ebooks, manuals, and slide decks viewed page by
-            page. Vid2PDF focuses on stable segments, best-frame selection, and
-            reviewable page reconstruction rather than raw screenshot capture.
-          </p>
-          <div className="hero__stats">
-            <div className="stat-card">
-              <strong>{jobs.length}</strong>
-              <span>Sessions tracked</span>
-            </div>
-            <div className="stat-card">
-              <strong>{totalPages}</strong>
-              <span>Pages prepared</span>
-            </div>
-            <div className="stat-card">
-              <strong>{readyJobs}</strong>
-              <span>Ready to export</span>
-            </div>
+          <div className="dashboard-grid__pipeline">
+            <PipelineStepper job={activeJob} />
           </div>
-        </div>
-        <div className="hero__panel">
-          <div className="panel-topline">
-            <span className="panel-label">Workflow</span>
-            <span className="panel-tag">Current pipeline</span>
+          <div className="dashboard-grid__sessions">
+            <JobOverview
+              activeJob={activeJob}
+              isLoading={isBootstrapping}
+              jobs={jobs}
+              onSelectJob={setActiveJobId}
+            />
           </div>
-          <div className="pipeline-list">
-            {pipelineSteps.map((step, index) => (
-              <article className="pipeline-item" key={step.title}>
-                <span className="pipeline-item__index">0{index + 1}</span>
-                <div>
-                  <h3>{step.title}</h3>
-                  <p>{step.description}</p>
-                </div>
-              </article>
-            ))}
+          <div className="dashboard-grid__status">
+            <ProcessingStatusCard activeJob={activeJob} loadError={loadError} />
           </div>
-        </div>
-      </header>
-
-      <main className="main-grid">
-        <div className="main-grid__left">
-          <UploadPanel onJobCreated={upsertJob} />
-          <JobOverview
-            activeJob={activeJob}
-            isLoading={isBootstrapping}
-            jobs={jobs}
-            onSelectJob={setActiveJobId}
-          />
-        </div>
-        <div className="main-grid__right">
-          <SectionCard
-            eyebrow="Product"
-            title="Built around reconstruction, not screenshot stitching"
-            subtitle="The workspace follows the actual product flow: ingest a recording, inspect extracted pages, refine the result, and export the final PDF."
-          >
-            <div className="feature-grid">
-              <article className="feature-card">
-                <span className="feature-card__label">Page-aware</span>
-                <p>Optimized for recordings where a document is viewed page by page.</p>
-              </article>
-              <article className="feature-card">
-                <span className="feature-card__label">Quality-first</span>
-                <p>Designed to choose the strongest frame from each stable page segment.</p>
-              </article>
-              <article className="feature-card">
-                <span className="feature-card__label">Reviewable</span>
-                <p>Pages can be checked before export instead of trusting a blind batch conversion.</p>
-              </article>
-            </div>
-            {loadError ? (
-              <div className="status-banner status-banner--error">
-                <strong>Workspace sync needs attention.</strong>
-                <span>{loadError}</span>
-              </div>
-            ) : (
-              <div className="status-banner">
-                <strong>Live workspace state is connected.</strong>
-                <span>Jobs, page actions, and export status are now synchronized through the backend contracts.</span>
-              </div>
-            )}
-          </SectionCard>
-          <PageReviewBoard job={activeJob} onJobUpdated={upsertJob} />
-        </div>
+          <div className="dashboard-grid__review">
+            <PageReviewBoard job={activeJob} onJobUpdated={upsertJob} />
+          </div>
+        </section>
+        <p className="workspace-footnote">
+          {formatCount(jobs.length, "session")} tracked locally. Backend polling remains active while jobs process or export.
+        </p>
       </main>
     </div>
   );
