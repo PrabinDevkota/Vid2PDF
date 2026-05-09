@@ -1,0 +1,79 @@
+{
+  "jobs": [
+    {
+      "id": "267caa93727f",
+      "filename": "prabin_bl.sc.u4cse24170.mp4",
+      "processing_mode": "screen",
+      "status": "ready",
+      "created_at": "2026-05-09T17:10:22.339159+00:00",
+      "updated_at": "2026-05-09T17:11:47.543009+00:00",
+      "started_at": "2026-05-09T17:10:22.428493+00:00",
+      "completed_at": "2026-05-09T17:10:54.876257+00:00",
+      "current_stage_key": "prepare_previews",
+      "progress": {
+        "percent": 100,
+        "message": "Pages are ready for review."
+      },
+      "notes": [
+        "Pipeline completed in screen mode with background execution.",
+        "Pages can now be reviewed, reordered, rotated, deleted, and exported through backend-backed state.",
+        "Processed video at 29.87 fps, 864x1446, duration 60.2s.",
+        "Sampled 257 frames and detected 0 stable page segments.",
+        "Selected 0 representative frames, collapsed to 0 sequence-stable candidates, removed 0 duplicates, and kept 0 pages after deduplication."
+      ],
+      "stages": [
+        {
+          "key": "sample_frames",
+          "label": "Sample frames from the uploaded video",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-05-09T17:10:22.443512+00:00",
+          "completed_at": "2026-05-09T17:10:51.491582+00:00"
+        },
+        {
+          "key": "detect_segments",
+          "label": "Detect stable page-view segments",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-05-09T17:10:51.492584+00:00",
+          "completed_at": "2026-05-09T17:10:54.577772+00:00"
+        },
+        {
+          "key": "select_frames",
+          "label": "Select the clearest frame per segment",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-05-09T17:10:54.577772+00:00",
+          "completed_at": "2026-05-09T17:10:54.578867+00:00"
+        },
+        {
+          "key": "remove_duplicates",
+          "label": "Remove duplicate or weak pages",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-05-09T17:10:54.579873+00:00",
+          "completed_at": "2026-05-09T17:10:54.581158+00:00"
+        },
+        {
+          "key": "prepare_previews",
+          "label": "Prepare preview metadata",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-05-09T17:10:54.581158+00:00",
+          "completed_at": "2026-05-09T17:10:54.582658+00:00"
+        }
+      ],
+      "pages": [],
+      "export": {
+        "status": "failed",
+        "progress_percent": 5,
+        "filename": null,
+        "download_url": null,
+        "requested_at": "2026-05-09T17:11:47.541145+00:00",
+        "completed_at": null,
+        "error": "No active pages available for export."
+      },
+      "upload_path": "backend\\data\\uploads\\267caa93727f-prabin_bl.sc.u4cse24170.mp4"
+    }
+  ]
+}

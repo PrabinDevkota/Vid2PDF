@@ -10,4 +10,5 @@ __pycache__/
 backend/data/
 frontend/.env
 backend/.env
+*.mp4
 

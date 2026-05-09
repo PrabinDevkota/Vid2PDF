@@ -132,7 +132,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
       return;
     }
 
-    const deletedPageIds = job.pages.filter((page) => page.deleted).map((page) => page.id);
+    const deletedPageIds: string[] = job.pages.filter((page) => page.deleted).map((page) => page.id);
     setIsMutating(true);
     setActionError(null);
     try {
@@ -537,109 +537,109 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                 const thumbnailUrl = resolveArtifactUrl(page.thumbnailUrl);
 
                 return (
-                <article
-                  className={`page-card ${draggedPageId === page.id ? "page-card--dragging" : ""}`}
-                  draggable={!isMutating}
-                  key={page.id}
-                  onDragEnd={() => setDraggedPageId(null)}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                  }}
-                  onDragStart={() => setDraggedPageId(page.id)}
-                  onDrop={() => {
-                    if (!draggedPageId || draggedPageId === page.id) {
-                      return;
-                    }
+                  <article
+                    className={`page-card ${draggedPageId === page.id ? "page-card--dragging" : ""}`}
+                    draggable={!isMutating}
+                    key={page.id}
+                    onDragEnd={() => setDraggedPageId(null)}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                    }}
+                    onDragStart={() => setDraggedPageId(page.id)}
+                    onDrop={() => {
+                      if (!draggedPageId || draggedPageId === page.id) {
+                        return;
+                      }
 
-                    const reorderedIds = [...visiblePages.map((item) => item.id)];
-                    const fromIndex = reorderedIds.indexOf(draggedPageId);
-                    const toIndex = reorderedIds.indexOf(page.id);
-                    if (fromIndex < 0 || toIndex < 0) {
-                      return;
-                    }
-                    reorderedIds.splice(fromIndex, 1);
-                    reorderedIds.splice(toIndex, 0, draggedPageId);
-                    void handleReorder(reorderedIds);
-                  }}
-                >
-                  <div className="page-card__preview">
-                    <div className="page-card__preview-tag">Page preview</div>
-                    <div className="page-card__drag-handle">Drag to reorder</div>
-                    {thumbnailUrl ? (
-                      <img
-                        alt={page.previewLabel}
-                        className="page-preview-image"
-                        src={thumbnailUrl}
-                        style={{ transform: `rotate(${page.rotation}deg)` }}
-                      />
-                    ) : (
-                      <div
-                        className="page-placeholder"
-                        style={{ transform: `rotate(${page.rotation}deg)` }}
+                      const reorderedIds = [...visiblePages.map((item) => item.id)];
+                      const fromIndex = reorderedIds.indexOf(draggedPageId);
+                      const toIndex = reorderedIds.indexOf(page.id);
+                      if (fromIndex < 0 || toIndex < 0) {
+                        return;
+                      }
+                      reorderedIds.splice(fromIndex, 1);
+                      reorderedIds.splice(toIndex, 0, draggedPageId);
+                      void handleReorder(reorderedIds);
+                    }}
+                  >
+                    <div className="page-card__preview">
+                      <div className="page-card__preview-tag">Page preview</div>
+                      <div className="page-card__drag-handle">Drag to reorder</div>
+                      {thumbnailUrl ? (
+                        <img
+                          alt={page.previewLabel}
+                          className="page-preview-image"
+                          src={thumbnailUrl}
+                          style={{ transform: `rotate(${page.rotation}deg)` }}
+                        />
+                      ) : (
+                        <div
+                          className="page-placeholder"
+                          style={{ transform: `rotate(${page.rotation}deg)` }}
+                        >
+                          <span>{page.previewLabel}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="page-card__content">
+                      <div className="page-card__header">
+                        <div className="page-card__title">
+                          <h4>Page {index + 1}</h4>
+                          {page.manual ? (
+                            <span className="page-origin-badge page-origin-badge--manual">Manual</span>
+                          ) : (
+                            <span className="page-origin-badge">Auto</span>
+                          )}
+                        </div>
+                        <span className="page-score">
+                          Score {page.sharpnessScore.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="page-meta-row">
+                        <span>
+                          {page.manual
+                            ? `Recovered at ${page.sourceTimestamp.toFixed(1)}s`
+                            : `Segment ${page.segmentStart.toFixed(1)}s to ${page.segmentEnd.toFixed(1)}s`}
+                        </span>
+                        <span>Rotation {page.rotation}°</span>
+                      </div>
+                      <div className="page-meta-row">
+                        <span>Frame #{page.sourceFrameIndex}</span>
+                        <span>Timestamp {page.sourceTimestamp.toFixed(1)}s</span>
+                      </div>
+                    </div>
+                    <div className="page-card__actions">
+                      <button
+                        disabled={isMutating || index === 0}
+                        onClick={() => void handleShift(page.id, -1)}
+                        type="button"
                       >
-                        <span>{page.previewLabel}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="page-card__content">
-                    <div className="page-card__header">
-                      <div className="page-card__title">
-                        <h4>Page {index + 1}</h4>
-                        {page.manual ? (
-                          <span className="page-origin-badge page-origin-badge--manual">Manual</span>
-                        ) : (
-                          <span className="page-origin-badge">Auto</span>
-                        )}
-                      </div>
-                      <span className="page-score">
-                        Score {page.sharpnessScore.toFixed(2)}
-                      </span>
+                        Up
+                      </button>
+                      <button
+                        disabled={isMutating || index === visiblePages.length - 1}
+                        onClick={() => void handleShift(page.id, 1)}
+                        type="button"
+                      >
+                        Down
+                      </button>
+                      <button
+                        disabled={isMutating}
+                        onClick={() => void handleRotate(page.id, page.rotation + 90)}
+                        type="button"
+                      >
+                        Rotate
+                      </button>
+                      <button
+                        className="danger-button"
+                        disabled={isMutating}
+                        onClick={() => void handleDelete(page.id, true)}
+                        type="button"
+                      >
+                        Delete
+                      </button>
                     </div>
-                    <div className="page-meta-row">
-                      <span>
-                        {page.manual
-                          ? `Recovered at ${page.sourceTimestamp.toFixed(1)}s`
-                          : `Segment ${page.segmentStart.toFixed(1)}s to ${page.segmentEnd.toFixed(1)}s`}
-                      </span>
-                      <span>Rotation {page.rotation}°</span>
-                    </div>
-                    <div className="page-meta-row">
-                      <span>Frame #{page.sourceFrameIndex}</span>
-                      <span>Timestamp {page.sourceTimestamp.toFixed(1)}s</span>
-                    </div>
-                  </div>
-                  <div className="page-card__actions">
-                    <button
-                      disabled={isMutating || index === 0}
-                      onClick={() => void handleShift(page.id, -1)}
-                      type="button"
-                    >
-                      Up
-                    </button>
-                    <button
-                      disabled={isMutating || index === visiblePages.length - 1}
-                      onClick={() => void handleShift(page.id, 1)}
-                      type="button"
-                    >
-                      Down
-                    </button>
-                    <button
-                      disabled={isMutating}
-                      onClick={() => void handleRotate(page.id, page.rotation + 90)}
-                      type="button"
-                    >
-                      Rotate
-                    </button>
-                    <button
-                      className="danger-button"
-                      disabled={isMutating}
-                      onClick={() => void handleDelete(page.id, true)}
-                      type="button"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </article>
+                  </article>
                 );
               })}
             </div>
