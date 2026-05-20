@@ -4,6 +4,48 @@ export type PageStatus = "active" | "deleted";
 export type ExportStatus = "idle" | "processing" | "ready" | "failed";
 export type ProcessingMode = "screen" | "camera";
 
+export interface EditPoint {
+  x: number;
+  y: number;
+}
+
+export interface CropBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface DrawStroke {
+  color: string;
+  width: number;
+  points: EditPoint[];
+}
+
+export interface TextAnnotation {
+  text: string;
+  x: number;
+  y: number;
+  color: string;
+  fontSize: number;
+}
+
+export interface BlurRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  intensity: number;
+}
+
+export interface PageEdits {
+  rotation: number;
+  crop: CropBox | null;
+  strokes: DrawStroke[];
+  texts: TextAnnotation[];
+  blurRegions: BlurRegion[];
+}
+
 export interface ProgressState {
   percent: number;
   message: string;
@@ -26,6 +68,7 @@ export interface ExtractedPage {
   previewLabel: string;
   thumbnailUrl: string | null;
   imageUrl: string | null;
+  sourceImageUrl: string | null;
   sharpnessScore: number;
   segmentStart: number;
   segmentEnd: number;
@@ -35,6 +78,7 @@ export interface ExtractedPage {
   rotation: number;
   status: PageStatus;
   deleted: boolean;
+  edits: PageEdits;
 }
 
 export interface ExportState {

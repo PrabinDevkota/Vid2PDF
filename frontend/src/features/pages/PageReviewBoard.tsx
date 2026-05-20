@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ProcessingJob } from "../../types";
+import type { ExtractedPage, PageEdits, ProcessingJob } from "../../types";
 import { SectionCard } from "../../components/SectionCard";
 import {
   addManualPage,
@@ -9,6 +9,7 @@ import {
   startExport,
   updatePage,
 } from "../../lib/api";
+import { PageEditorModal } from "./PageEditorModal";
 
 interface PageReviewBoardProps {
   job: ProcessingJob | null;
@@ -22,6 +23,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
   const [videoCurrentTime, setVideoCurrentTime] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
   const [isVideoReady, setIsVideoReady] = useState(false);
+  const [editingPage, setEditingPage] = useState<ExtractedPage | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const visiblePages = job?.pages.filter((page) => !page.deleted) ?? [];
   const deletedPages = job?.pages.filter((page) => page.deleted) ?? [];
@@ -62,7 +64,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
     setVideoCurrentTime(clamped);
   }
 
-  async function handleRotate(pageId: string, rotation: number) {
+  async function handleSaveEdits(pageId: string, edits: PageEdits) {
     if (!job) {
       return;
     }
@@ -70,10 +72,11 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
     setIsMutating(true);
     setActionError(null);
     try {
-      const updatedJob = await updatePage(job.id, pageId, { rotation });
+      const updatedJob = await updatePage(job.id, pageId, { edits });
       onJobUpdated(updatedJob);
+      setEditingPage(null);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Failed to rotate page.");
+      setActionError(error instanceof Error ? error.message : "Failed to save page edits.");
     } finally {
       setIsMutating(false);
     }
@@ -570,13 +573,9 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                           alt={page.previewLabel}
                           className="page-preview-image"
                           src={thumbnailUrl}
-                          style={{ transform: `rotate(${page.rotation}deg)` }}
                         />
                       ) : (
-                        <div
-                          className="page-placeholder"
-                          style={{ transform: `rotate(${page.rotation}deg)` }}
-                        >
+                        <div className="page-placeholder">
                           <span>{page.previewLabel}</span>
                         </div>
                       )}
@@ -590,6 +589,9 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                           ) : (
                             <span className="page-origin-badge">Auto</span>
                           )}
+                          {hasEdits(page) ? (
+                            <span className="page-origin-badge page-origin-badge--edited">Edited</span>
+                          ) : null}
                         </div>
                         <span className="page-score">
                           Score {page.sharpnessScore.toFixed(2)}
@@ -601,7 +603,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                             ? `Recovered at ${page.sourceTimestamp.toFixed(1)}s`
                             : `Segment ${page.segmentStart.toFixed(1)}s to ${page.segmentEnd.toFixed(1)}s`}
                         </span>
-                        <span>Rotation {page.rotation}°</span>
+                        <span>Rotation {page.edits.rotation}°</span>
                       </div>
                       <div className="page-meta-row">
                         <span>Frame #{page.sourceFrameIndex}</span>
@@ -625,10 +627,10 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                       </button>
                       <button
                         disabled={isMutating}
-                        onClick={() => void handleRotate(page.id, page.rotation + 90)}
+                        onClick={() => setEditingPage(page)}
                         type="button"
                       >
-                        Rotate
+                        Edit
                       </button>
                       <button
                         className="danger-button"
@@ -680,6 +682,22 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
           ) : null}
         </div>
       )}
+      <PageEditorModal
+        isSaving={isMutating}
+        page={editingPage}
+        onClose={() => setEditingPage(null)}
+        onSave={(edits) => handleSaveEdits(editingPage!.id, edits)}
+      />
     </SectionCard>
+  );
+}
+
+function hasEdits(page: ExtractedPage): boolean {
+  return (
+    page.edits.rotation !== 0 ||
+    page.edits.crop !== null ||
+    page.edits.strokes.length > 0 ||
+    page.edits.texts.length > 0 ||
+    page.edits.blurRegions.length > 0
   );
 }

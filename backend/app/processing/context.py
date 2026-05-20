@@ -6,6 +6,7 @@ from app.processing.types import PipelineContext
 
 def build_pipeline_context(job_id: str, upload_path: str, processing_mode: str) -> PipelineContext:
     job_root = Path(settings.storage_path) / "jobs" / job_id
+    source_page_dir = job_root / "source-pages"
     page_dir = job_root / "pages"
     thumbnail_dir = job_root / "thumbnails"
     debug_dir = job_root / "debug"
@@ -14,6 +15,7 @@ def build_pipeline_context(job_id: str, upload_path: str, processing_mode: str) 
         job_id=job_id,
         upload_path=upload_path,
         job_root=str(job_root),
+        source_page_dir=str(source_page_dir),
         page_dir=str(page_dir),
         thumbnail_dir=str(thumbnail_dir),
         debug_dir=str(debug_dir),

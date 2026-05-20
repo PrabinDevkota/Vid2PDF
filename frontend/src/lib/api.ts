@@ -1,4 +1,4 @@
-import type { ProcessingJob, ProcessingMode } from "../types";
+import type { PageEdits, ProcessingJob, ProcessingMode } from "../types";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ||
@@ -45,7 +45,7 @@ export async function uploadVideo(
 export async function updatePage(
   jobId: string,
   pageId: string,
-  payload: { rotation?: number; deleted?: boolean },
+  payload: { rotation?: number; deleted?: boolean; edits?: PageEdits },
 ): Promise<ProcessingJob> {
   const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/pages/${pageId}`, {
     method: "PATCH",

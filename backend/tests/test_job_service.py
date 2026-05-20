@@ -6,8 +6,18 @@ from fastapi.testclient import TestClient
 
 from app.core.settings import settings
 from app.main import app
-from app.models.job import ExportArtifact, Job, Page, Stage
-from app.schemas.job import AddManualPageRequest, BulkUpdatePagesRequest, UpdatePageRequest
+from app.models.job import ExportArtifact, Job, Page, PageEdits, Stage
+from app.schemas.job import (
+    AddManualPageRequest,
+    BlurRegionPayload,
+    BulkUpdatePagesRequest,
+    CropBoxPayload,
+    DrawStrokePayload,
+    EditPointPayload,
+    TextAnnotationPayload,
+    UpdatePageEditsPayload,
+    UpdatePageRequest,
+)
 from app.services.job_service import JobService
 
 
@@ -260,3 +270,108 @@ def test_upload_rejects_invalid_processing_mode() -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_update_page_persists_crop_blur_and_text_edits(tmp_path) -> None:
+    settings.storage_path = str(tmp_path)
+    service = JobService()
+    now = datetime.now(timezone.utc)
+    source_dir = tmp_path / "jobs" / "job-edit" / "source-pages"
+    page_dir = tmp_path / "jobs" / "job-edit" / "pages"
+    thumb_dir = tmp_path / "jobs" / "job-edit" / "thumbnails"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    page_dir.mkdir(parents=True, exist_ok=True)
+    thumb_dir.mkdir(parents=True, exist_ok=True)
+
+    image = np.full((220, 180, 3), 255, dtype=np.uint8)
+    cv2.rectangle(image, (20, 20), (160, 180), (230, 230, 230), thickness=-1)
+    cv2.putText(image, "Secret", (42, 104), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (10, 10, 10), 2, cv2.LINE_AA)
+    source_path = source_dir / "page-1-source.png"
+    image_path = page_dir / "page-1.png"
+    thumb_path = thumb_dir / "page-1-thumb.jpg"
+    cv2.imwrite(str(source_path), image)
+    cv2.imwrite(str(image_path), image)
+    cv2.imwrite(str(thumb_path), image)
+
+    job = Job(
+        id="job-edit",
+        filename="edit.mp4",
+        processing_mode="screen",
+        status="ready",
+        created_at=now,
+        updated_at=now,
+        pages=[
+            Page(
+                id="page-1",
+                job_id="job-edit",
+                order_index=0,
+                page_number=1,
+                preview_label="Page 1",
+                thumbnail_url="/artifacts/jobs/job-edit/thumbnails/page-1-thumb.jpg",
+                image_url="/artifacts/jobs/job-edit/pages/page-1.png",
+                source_image_url="/artifacts/jobs/job-edit/source-pages/page-1-source.png",
+                sharpness_score=0.92,
+                segment_start=0.0,
+                segment_end=1.0,
+                source_frame_index=4,
+                source_timestamp=0.2,
+            )
+        ],
+        export=ExportArtifact(status="ready", filename="job-edit.pdf"),
+    )
+    service._jobs[job.id] = job
+
+    response = service.update_page(
+        job.id,
+        "page-1",
+        UpdatePageRequest(
+            edits=UpdatePageEditsPayload(
+                rotation=90,
+                crop=CropBoxPayload(x=10, y=12, width=120, height=140),
+                strokes=[
+                    DrawStrokePayload(
+                        color="#ff0000",
+                        width=6,
+                        points=[
+                            EditPointPayload(x=10, y=20),
+                            EditPointPayload(x=80, y=26),
+                        ],
+                    )
+                ],
+                texts=[
+                    TextAnnotationPayload(
+                        text="Approved",
+                        x=18,
+                        y=44,
+                        color="#0000ff",
+                        fontSize=22,
+                    )
+                ],
+                blurRegions=[
+                    BlurRegionPayload(
+                        x=30,
+                        y=50,
+                        width=50,
+                        height=32,
+                        intensity=21,
+                    )
+                ],
+            )
+        ),
+    )
+
+    assert response is not None
+    assert response.export.status == "idle"
+    assert response.pages[0].rotation == 90
+    assert response.pages[0].edits.crop is not None
+    assert response.pages[0].edits.crop.width == 120
+    assert response.pages[0].edits.texts[0].text == "Approved"
+
+    rendered = cv2.imread(str(image_path))
+    thumbnail = cv2.imread(str(thumb_path))
+    assert rendered is not None
+    assert thumbnail is not None
+    assert rendered.shape[1] == 120
+    assert rendered.shape[0] == 140
+    assert not np.array_equal(rendered, image)
+    assert service._jobs[job.id].pages[0].edits != PageEdits()

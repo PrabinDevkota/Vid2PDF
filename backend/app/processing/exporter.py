@@ -23,8 +23,6 @@ def export_pdf(job_id: str, pages: list[SelectedPage], output_dir: str) -> Expor
     page_images = []
     for index, page in enumerate(pages):
         image = Image.open(page.image_path).convert("RGB")
-        if page.rotation:
-            image = image.rotate(-page.rotation, expand=True, fillcolor="white")
         if index == 0:
             first_page = image
         else:

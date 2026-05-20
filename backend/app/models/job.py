@@ -15,6 +15,54 @@ class Progress:
     message: str = "Waiting to start."
 
 
+@dataclass
+class EditPoint:
+    x: float
+    y: float
+
+
+@dataclass
+class CropBox:
+    x: int
+    y: int
+    width: int
+    height: int
+
+
+@dataclass
+class DrawStroke:
+    color: str
+    width: int
+    points: list[EditPoint] = field(default_factory=list)
+
+
+@dataclass
+class TextAnnotation:
+    text: str
+    x: float
+    y: float
+    color: str = "#111111"
+    font_size: int = 24
+
+
+@dataclass
+class BlurRegion:
+    x: int
+    y: int
+    width: int
+    height: int
+    intensity: int = 18
+
+
+@dataclass
+class PageEdits:
+    rotation: int = 0
+    crop: CropBox | None = None
+    strokes: list[DrawStroke] = field(default_factory=list)
+    texts: list[TextAnnotation] = field(default_factory=list)
+    blur_regions: list[BlurRegion] = field(default_factory=list)
+
+
 
 @dataclass
 class Stage:
@@ -44,6 +92,8 @@ class Page:
     rotation: int = 0
     status: PageStatus = "active"
     deleted: bool = False
+    source_image_url: str | None = None
+    edits: PageEdits = field(default_factory=PageEdits)
 
 
 @dataclass

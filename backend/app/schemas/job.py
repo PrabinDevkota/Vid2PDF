@@ -4,6 +4,56 @@ from typing import Literal
 from pydantic import BaseModel
 
 
+class EditPointPayload(BaseModel):
+    x: float
+    y: float
+
+
+class CropBoxPayload(BaseModel):
+    x: int
+    y: int
+    width: int
+    height: int
+
+
+class DrawStrokePayload(BaseModel):
+    color: str
+    width: int
+    points: list[EditPointPayload]
+
+
+class TextAnnotationPayload(BaseModel):
+    text: str
+    x: float
+    y: float
+    color: str
+    fontSize: int
+
+
+class BlurRegionPayload(BaseModel):
+    x: int
+    y: int
+    width: int
+    height: int
+    intensity: int
+
+
+class PageEditsPayload(BaseModel):
+    rotation: int
+    crop: CropBoxPayload | None
+    strokes: list[DrawStrokePayload]
+    texts: list[TextAnnotationPayload]
+    blurRegions: list[BlurRegionPayload]
+
+
+class UpdatePageEditsPayload(BaseModel):
+    rotation: int = 0
+    crop: CropBoxPayload | None = None
+    strokes: list[DrawStrokePayload] = []
+    texts: list[TextAnnotationPayload] = []
+    blurRegions: list[BlurRegionPayload] = []
+
+
 class ProgressResponse(BaseModel):
     percent: int
     message: str
@@ -26,6 +76,7 @@ class PageResponse(BaseModel):
     previewLabel: str
     thumbnailUrl: str | None
     imageUrl: str | None
+    sourceImageUrl: str | None
     sharpnessScore: float
     segmentStart: float
     segmentEnd: float
@@ -35,6 +86,7 @@ class PageResponse(BaseModel):
     rotation: int
     status: Literal["active", "deleted"]
     deleted: bool
+    edits: PageEditsPayload
 
 
 class ExportResponse(BaseModel):
@@ -68,6 +120,7 @@ class JobResponse(BaseModel):
 class UpdatePageRequest(BaseModel):
     rotation: int | None = None
     deleted: bool | None = None
+    edits: UpdatePageEditsPayload | None = None
 
 
 class BulkUpdatePagesRequest(BaseModel):

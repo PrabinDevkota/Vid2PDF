@@ -103,6 +103,7 @@ class PipelineContext:
     job_id: str
     upload_path: str
     job_root: str
+    source_page_dir: str
     page_dir: str
     thumbnail_dir: str
     debug_dir: str

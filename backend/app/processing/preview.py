@@ -12,14 +12,18 @@ def attach_previews(
     pages: list[SelectedPage],
     context: PipelineContext,
 ) -> list[SelectedPage]:
+    source_page_dir = Path(context.source_page_dir)
     page_dir = Path(context.page_dir)
     thumbnail_dir = Path(context.thumbnail_dir)
+    source_page_dir.mkdir(parents=True, exist_ok=True)
     page_dir.mkdir(parents=True, exist_ok=True)
     thumbnail_dir.mkdir(parents=True, exist_ok=True)
 
     for page in pages:
+        source_filename = f"{page.page_id}-source.png"
         image_filename = f"{page.page_id}.png"
         thumb_filename = f"{page.page_id}-thumb.jpg"
+        source_image_path = source_page_dir / source_filename
         image_path = page_dir / image_filename
         thumbnail_path = thumbnail_dir / thumb_filename
 
@@ -30,6 +34,7 @@ def attach_previews(
             output_image = normalize_final_page(output_image)
         page.selected_frame.image = output_image
 
+        cv2.imwrite(str(source_image_path), output_image)
         cv2.imwrite(str(image_path), output_image)
         thumbnail_image = _build_thumbnail(output_image)
         cv2.imwrite(str(thumbnail_path), thumbnail_image, [int(cv2.IMWRITE_JPEG_QUALITY), 88])
@@ -38,6 +43,9 @@ def attach_previews(
         page.thumbnail_path = str(thumbnail_path)
         page.image_url = f"{context.artifact_base_url}/jobs/{context.job_id}/pages/{image_filename}"
         page.preview_url = f"{context.artifact_base_url}/jobs/{context.job_id}/thumbnails/{thumb_filename}"
+        page.notes.append(
+            f"Immutable source image stored at {context.artifact_base_url}/jobs/{context.job_id}/source-pages/{source_filename}."
+        )
 
     return pages
 

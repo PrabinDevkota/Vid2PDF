@@ -11,11 +11,25 @@ import cv2
 from fastapi import UploadFile
 
 from app.core.settings import settings
-from app.models.job import ExportArtifact, Job, Page, ProcessingMode, Progress, Stage
+from app.models.job import (
+    BlurRegion,
+    CropBox,
+    DrawStroke,
+    EditPoint,
+    ExportArtifact,
+    Job,
+    Page,
+    PageEdits,
+    ProcessingMode,
+    Progress,
+    Stage,
+    TextAnnotation,
+)
 from app.processing.context import build_pipeline_context
 from app.processing.deduper import remove_duplicates
 from app.processing.debug import write_pipeline_debug_report
 from app.processing.document import detect_document_region
+from app.processing.editor import write_rendered_page
 from app.processing.pipeline import PIPELINE_STAGES, build_export
 from app.processing.preview import attach_previews
 from app.processing.scoring import compute_frame_quality
@@ -26,14 +40,21 @@ from app.processing.selector import select_best_frames
 from app.processing.types import FrameQuality, SampledFrame, SelectedPage
 from app.schemas.job import (
     AddManualPageRequest,
+    BlurRegionPayload,
     BulkUpdatePagesRequest,
+    CropBoxPayload,
+    DrawStrokePayload,
+    EditPointPayload,
     ExportResponse,
     JobResponse,
     PageResponse,
+    PageEditsPayload,
     ProgressResponse,
     ReorderPagesRequest,
     StageResponse,
+    TextAnnotationPayload,
     UpdatePageRequest,
+    UpdatePageEditsPayload,
 )
 
 
@@ -107,11 +128,19 @@ class JobService:
             if page is None:
                 return None
 
+            needs_rerender = payload.rotation is not None or payload.edits is not None
             if payload.rotation is not None:
-                page.rotation = payload.rotation % 360
+                page.edits.rotation = payload.rotation % 360
+                page.rotation = page.edits.rotation
+            if payload.edits is not None:
+                page.edits = self._to_page_edits(payload.edits)
+                page.rotation = page.edits.rotation
             if payload.deleted is not None:
                 page.deleted = payload.deleted
                 page.status = "deleted" if payload.deleted else "active"
+
+            if needs_rerender and page.source_image_url and page.image_url and page.thumbnail_url:
+                self._render_page_artifacts(page)
 
             self._invalidate_export(job)
             job.updated_at = datetime.now(timezone.utc)
@@ -135,7 +164,10 @@ class JobService:
             for page_id in payload.pageIds:
                 page = page_by_id[page_id]
                 if payload.rotation is not None:
-                    page.rotation = payload.rotation % 360
+                    page.edits.rotation = payload.rotation % 360
+                    page.rotation = page.edits.rotation
+                    if page.source_image_url and page.image_url and page.thumbnail_url:
+                        self._render_page_artifacts(page)
                 if payload.deleted is not None:
                     page.deleted = payload.deleted
                     page.status = "deleted" if payload.deleted else "active"
@@ -216,6 +248,7 @@ class JobService:
                     source_frame_index=manual_page.selected_frame.frame_index,
                     source_timestamp=manual_page.selected_frame.timestamp,
                     manual=True,
+                    source_image_url=self._build_source_image_url(job.id, manual_page.page_id),
                 )
             )
             job.notes.append(f"Manual page added at {timestamp:.2f}s from the source video.")
@@ -369,6 +402,7 @@ class JobService:
                         segment_end=page.segment_end,
                         source_frame_index=page.selected_frame.frame_index,
                         source_timestamp=page.selected_frame.timestamp,
+                        source_image_url=self._build_source_image_url(job.id, page.page_id),
                     )
                     for index, page in enumerate(preview_pages)
                 ]
@@ -604,7 +638,6 @@ class JobService:
             selected_frame=sampled_frame,
             image_path=str(image_path),
             thumbnail_path=str(thumbnail_path),
-            rotation=page.rotation,
             preview_url=page.thumbnail_url,
             image_url=page.image_url,
         )
@@ -654,6 +687,7 @@ class JobService:
                     previewLabel=page.preview_label,
                     thumbnailUrl=page.thumbnail_url,
                     imageUrl=page.image_url,
+                    sourceImageUrl=page.source_image_url,
                     sharpnessScore=page.sharpness_score,
                     segmentStart=page.segment_start,
                     segmentEnd=page.segment_end,
@@ -663,6 +697,7 @@ class JobService:
                     rotation=page.rotation,
                     status=page.status,
                     deleted=page.deleted,
+                    edits=self._to_page_edits_response(page.edits),
                 )
                 for page in pages
             ],
@@ -678,6 +713,219 @@ class JobService:
             requestedAt=export.requested_at,
             completedAt=export.completed_at,
             error=export.error,
+        )
+
+    def _to_page_edits(
+        self,
+        payload: UpdatePageEditsPayload,
+    ) -> PageEdits:
+        return PageEdits(
+            rotation=payload.rotation % 360,
+            crop=None
+            if payload.crop is None
+            else CropBox(
+                x=payload.crop.x,
+                y=payload.crop.y,
+                width=payload.crop.width,
+                height=payload.crop.height,
+            ),
+            strokes=[
+                DrawStroke(
+                    color=stroke.color,
+                    width=stroke.width,
+                    points=[EditPoint(x=point.x, y=point.y) for point in stroke.points],
+                )
+                for stroke in payload.strokes
+            ],
+            texts=[
+                TextAnnotation(
+                    text=text.text,
+                    x=text.x,
+                    y=text.y,
+                    color=text.color,
+                    font_size=text.fontSize,
+                )
+                for text in payload.texts
+            ],
+            blur_regions=[
+                BlurRegion(
+                    x=region.x,
+                    y=region.y,
+                    width=region.width,
+                    height=region.height,
+                    intensity=region.intensity,
+                )
+                for region in payload.blurRegions
+            ],
+        )
+
+    def _to_page_edits_response(
+        self,
+        edits: PageEdits,
+    ) -> PageEditsPayload:
+        crop = None
+        if edits.crop is not None:
+            crop = CropBoxPayload(
+                x=edits.crop.x,
+                y=edits.crop.y,
+                width=edits.crop.width,
+                height=edits.crop.height,
+            )
+
+        return PageEditsPayload(
+            rotation=edits.rotation,
+            crop=crop,
+            strokes=[
+                DrawStrokePayload(
+                    color=stroke.color,
+                    width=stroke.width,
+                    points=[
+                        EditPointPayload(x=point.x, y=point.y)
+                        for point in stroke.points
+                    ],
+                )
+                for stroke in edits.strokes
+            ],
+            texts=[
+                TextAnnotationPayload(
+                    text=text.text,
+                    x=text.x,
+                    y=text.y,
+                    color=text.color,
+                    fontSize=text.font_size,
+                )
+                for text in edits.texts
+            ],
+            blurRegions=[
+                BlurRegionPayload(
+                    x=region.x,
+                    y=region.y,
+                    width=region.width,
+                    height=region.height,
+                    intensity=region.intensity,
+                )
+                for region in edits.blur_regions
+            ],
+        )
+
+    def _serialize_page_edits(self, edits: PageEdits) -> dict[str, object]:
+        return {
+            "rotation": edits.rotation,
+            "crop": None
+            if edits.crop is None
+            else {
+                "x": edits.crop.x,
+                "y": edits.crop.y,
+                "width": edits.crop.width,
+                "height": edits.crop.height,
+            },
+            "strokes": [
+                {
+                    "color": stroke.color,
+                    "width": stroke.width,
+                    "points": [{"x": point.x, "y": point.y} for point in stroke.points],
+                }
+                for stroke in edits.strokes
+            ],
+            "texts": [
+                {
+                    "text": text.text,
+                    "x": text.x,
+                    "y": text.y,
+                    "color": text.color,
+                    "font_size": text.font_size,
+                }
+                for text in edits.texts
+            ],
+            "blur_regions": [
+                {
+                    "x": region.x,
+                    "y": region.y,
+                    "width": region.width,
+                    "height": region.height,
+                    "intensity": region.intensity,
+                }
+                for region in edits.blur_regions
+            ],
+        }
+
+    def _deserialize_page_edits(self, payload: object) -> PageEdits:
+        if not isinstance(payload, dict):
+            return PageEdits()
+
+        crop_payload = payload.get("crop")
+        crop = None
+        if isinstance(crop_payload, dict):
+            crop = CropBox(
+                x=int(crop_payload.get("x", 0)),
+                y=int(crop_payload.get("y", 0)),
+                width=int(crop_payload.get("width", 0)),
+                height=int(crop_payload.get("height", 0)),
+            )
+
+        strokes = []
+        for stroke_payload in payload.get("strokes", []):
+            if not isinstance(stroke_payload, dict):
+                continue
+            strokes.append(
+                DrawStroke(
+                    color=str(stroke_payload.get("color", "#111111")),
+                    width=int(stroke_payload.get("width", 2)),
+                    points=[
+                        EditPoint(x=float(point.get("x", 0.0)), y=float(point.get("y", 0.0)))
+                        for point in stroke_payload.get("points", [])
+                        if isinstance(point, dict)
+                    ],
+                )
+            )
+
+        texts = []
+        for text_payload in payload.get("texts", []):
+            if not isinstance(text_payload, dict):
+                continue
+            texts.append(
+                TextAnnotation(
+                    text=str(text_payload.get("text", "")),
+                    x=float(text_payload.get("x", 0.0)),
+                    y=float(text_payload.get("y", 0.0)),
+                    color=str(text_payload.get("color", "#111111")),
+                    font_size=int(text_payload.get("font_size", 24)),
+                )
+            )
+
+        blur_regions = []
+        for region_payload in payload.get("blur_regions", []):
+            if not isinstance(region_payload, dict):
+                continue
+            blur_regions.append(
+                BlurRegion(
+                    x=int(region_payload.get("x", 0)),
+                    y=int(region_payload.get("y", 0)),
+                    width=int(region_payload.get("width", 0)),
+                    height=int(region_payload.get("height", 0)),
+                    intensity=int(region_payload.get("intensity", 18)),
+                )
+            )
+
+        return PageEdits(
+            rotation=int(payload.get("rotation", 0)) % 360,
+            crop=crop,
+            strokes=strokes,
+            texts=texts,
+            blur_regions=blur_regions,
+        )
+
+    def _build_source_image_url(self, job_id: str, page_id: str) -> str:
+        return f"{settings.public_artifact_base_url}/jobs/{job_id}/source-pages/{page_id}-source.png"
+
+    def _render_page_artifacts(self, page: Page) -> None:
+        if not page.source_image_url or not page.image_url or not page.thumbnail_url:
+            raise ValueError("Page artifacts are incomplete for editing.")
+        write_rendered_page(
+            source_image_path=str(self._resolve_storage_path(page.source_image_url)),
+            output_image_path=str(self._resolve_storage_path(page.image_url)),
+            thumbnail_path=str(self._resolve_storage_path(page.thumbnail_url)),
+            edits=page.edits,
         )
 
     def _source_video_url(self, job: Job) -> str | None:
@@ -756,6 +1004,8 @@ class JobService:
                     "rotation": page.rotation,
                     "status": page.status,
                     "deleted": page.deleted,
+                    "source_image_url": page.source_image_url,
+                    "edits": self._serialize_page_edits(page.edits),
                 }
                 for page in job.pages
             ],
@@ -818,6 +1068,8 @@ class JobService:
                     rotation=int(page.get("rotation", 0)),
                     status=page.get("status", "active"),  # type: ignore[arg-type]
                     deleted=bool(page.get("deleted", False)),
+                    source_image_url=page.get("source_image_url", page.get("image_url")),  # type: ignore[arg-type]
+                    edits=self._deserialize_page_edits(page.get("edits")),
                 )
                 for page in payload.get("pages", [])  # type: ignore[arg-type]
             ],
