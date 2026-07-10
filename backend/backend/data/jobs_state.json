@@ -972,6 +972,416 @@
         "error": null
       },
       "upload_path": "backend\\data\\uploads\\1077af3d15df-WhatsApp Video 2026-03-26 at 2.48.42 AM.mp4"
+    },
+    {
+      "id": "4398fa03beab",
+      "filename": "WhatsApp Video 2026-03-27 at 10.56.04 PM.mp4",
+      "processing_mode": "camera",
+      "status": "ready",
+      "created_at": "2026-07-10T16:10:25.419479+00:00",
+      "updated_at": "2026-07-10T16:10:31.185732+00:00",
+      "started_at": "2026-07-10T16:10:25.432831+00:00",
+      "completed_at": "2026-07-10T16:10:31.185732+00:00",
+      "current_stage_key": "extract_text",
+      "progress": {
+        "percent": 100,
+        "message": "Pages are ready for review."
+      },
+      "notes": [
+        "Pipeline completed in camera mode with background execution.",
+        "Pages can now be reviewed, reordered, rotated, deleted, and exported through backend-backed state.",
+        "Processed video at 29.61 fps, 478x850, duration 35.6s.",
+        "Sampled 106 frames and detected 0 stable page segments.",
+        "Selected 0 representative frames, collapsed to 0 sequence-stable candidates, removed 0 duplicates, and kept 0 pages after deduplication.",
+        "Extracted text from 0 unique pages (0 with text)."
+      ],
+      "stages": [
+        {
+          "key": "sample_frames",
+          "label": "Sample frames from the uploaded video",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T16:10:25.434830+00:00",
+          "completed_at": "2026-07-10T16:10:30.445473+00:00"
+        },
+        {
+          "key": "detect_segments",
+          "label": "Detect stable page-view segments",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T16:10:30.449477+00:00",
+          "completed_at": "2026-07-10T16:10:31.045803+00:00"
+        },
+        {
+          "key": "select_frames",
+          "label": "Select the clearest frame per segment",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T16:10:31.048818+00:00",
+          "completed_at": "2026-07-10T16:10:31.051328+00:00"
+        },
+        {
+          "key": "remove_duplicates",
+          "label": "Remove duplicate or weak pages",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T16:10:31.053370+00:00",
+          "completed_at": "2026-07-10T16:10:31.056366+00:00"
+        },
+        {
+          "key": "prepare_previews",
+          "label": "Prepare preview metadata",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T16:10:31.058346+00:00",
+          "completed_at": "2026-07-10T16:10:31.062862+00:00"
+        },
+        {
+          "key": "extract_text",
+          "label": "Extract text from unique page frames",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T16:10:31.181661+00:00",
+          "completed_at": "2026-07-10T16:10:31.184727+00:00"
+        }
+      ],
+      "pages": [],
+      "export": {
+        "status": "idle",
+        "progress_percent": 0,
+        "filename": null,
+        "download_url": null,
+        "requested_at": null,
+        "completed_at": null,
+        "error": null
+      },
+      "text_export": {
+        "status": "idle",
+        "progress_percent": 0,
+        "filename": null,
+        "download_url": null,
+        "requested_at": null,
+        "completed_at": null,
+        "error": null
+      },
+      "upload_path": "backend\\data\\uploads\\4398fa03beab-WhatsApp Video 2026-03-27 at 10.56.04 PM.mp4"
+    },
+    {
+      "id": "448ca0614147",
+      "filename": "WhatsApp Video 2026-03-27 at 10.56.04 PM.mp4",
+      "processing_mode": "camera",
+      "status": "ready",
+      "created_at": "2026-07-10T16:10:59.166635+00:00",
+      "updated_at": "2026-07-10T16:11:36.525569+00:00",
+      "started_at": "2026-07-10T16:10:59.179147+00:00",
+      "completed_at": "2026-07-10T16:11:03.936595+00:00",
+      "current_stage_key": "extract_text",
+      "progress": {
+        "percent": 100,
+        "message": "Pages are ready for review."
+      },
+      "notes": [
+        "Pipeline completed in camera mode with background execution.",
+        "Pages can now be reviewed, reordered, rotated, deleted, and exported through backend-backed state.",
+        "Processed video at 29.61 fps, 478x850, duration 35.6s.",
+        "Sampled 106 frames and detected 0 stable page segments.",
+        "Selected 0 representative frames, collapsed to 0 sequence-stable candidates, removed 0 duplicates, and kept 0 pages after deduplication.",
+        "Extracted text from 0 unique pages (0 with text).",
+        "Manual page added at 5.94s from the source video.",
+        "Manual page added at 10.13s from the source video."
+      ],
+      "stages": [
+        {
+          "key": "sample_frames",
+          "label": "Sample frames from the uploaded video",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T16:10:59.180147+00:00",
+          "completed_at": "2026-07-10T16:11:03.213352+00:00"
+        },
+        {
+          "key": "detect_segments",
+          "label": "Detect stable page-view segments",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T16:11:03.217338+00:00",
+          "completed_at": "2026-07-10T16:11:03.801530+00:00"
+        },
+        {
+          "key": "select_frames",
+          "label": "Select the clearest frame per segment",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T16:11:03.805587+00:00",
+          "completed_at": "2026-07-10T16:11:03.808542+00:00"
+        },
+        {
+          "key": "remove_duplicates",
+          "label": "Remove duplicate or weak pages",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T16:11:03.811188+00:00",
+          "completed_at": "2026-07-10T16:11:03.815311+00:00"
+        },
+        {
+          "key": "prepare_previews",
+          "label": "Prepare preview metadata",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T16:11:03.818205+00:00",
+          "completed_at": "2026-07-10T16:11:03.824128+00:00"
+        },
+        {
+          "key": "extract_text",
+          "label": "Extract text from unique page frames",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T16:11:03.931567+00:00",
+          "completed_at": "2026-07-10T16:11:03.933570+00:00"
+        }
+      ],
+      "pages": [
+        {
+          "id": "manual-18873913",
+          "job_id": "448ca0614147",
+          "order_index": 0,
+          "page_number": 1,
+          "preview_label": "Manual page 1",
+          "thumbnail_url": "/artifacts/jobs/448ca0614147/thumbnails/manual-18873913-thumb.jpg",
+          "image_url": "/artifacts/jobs/448ca0614147/pages/manual-18873913.png",
+          "sharpness_score": -0.6437493123357422,
+          "segment_start": 5.944888888888889,
+          "segment_end": 5.944888888888889,
+          "source_frame_index": 176,
+          "source_timestamp": 5.944888888888889,
+          "manual": true,
+          "rotation": 0,
+          "status": "active",
+          "deleted": false,
+          "source_image_url": "/artifacts/jobs/448ca0614147/source-pages/manual-18873913-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": "ATOMIC\n\nHABITS\n\nHreak Aad Ones:\n\nTiny Changes,\n\nRemarkable\n\nResults",
+          "ocr_blocks": [
+            {
+              "text": "ATOMIC",
+              "confidence": 96.0,
+              "top": 198,
+              "left": 119
+            },
+            {
+              "text": "HABITS",
+              "confidence": 96.0,
+              "top": 259,
+              "left": 126
+            },
+            {
+              "text": "Hreak Aad Ones:",
+              "confidence": 69.33333333333333,
+              "top": 380,
+              "left": 179
+            },
+            {
+              "text": "Tiny Changes,",
+              "confidence": 95.5,
+              "top": 541,
+              "left": 124
+            },
+            {
+              "text": "Remarkable",
+              "confidence": 96.0,
+              "top": 579,
+              "left": 141
+            },
+            {
+              "text": "Results",
+              "confidence": 96.0,
+              "top": 618,
+              "left": 172
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        },
+        {
+          "id": "manual-33251f97",
+          "job_id": "448ca0614147",
+          "order_index": 1,
+          "page_number": 2,
+          "preview_label": "Manual page 2",
+          "thumbnail_url": "/artifacts/jobs/448ca0614147/thumbnails/manual-33251f97-thumb.jpg",
+          "image_url": "/artifacts/jobs/448ca0614147/pages/manual-33251f97.png",
+          "sharpness_score": -0.38890249308664726,
+          "segment_start": 10.133333333333333,
+          "segment_end": 10.133333333333333,
+          "source_frame_index": 300,
+          "source_timestamp": 10.133333333333333,
+          "manual": true,
+          "rotation": 0,
+          "status": "active",
+          "deleted": false,
+          "source_image_url": "/artifacts/jobs/448ca0614147/source-pages/manual-33251f97-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": "Cha\n\nere Vind ee Ded\n\nbt een\n\n2 Set",
+          "ocr_blocks": [
+            {
+              "text": "Cha",
+              "confidence": 49.0,
+              "top": 292,
+              "left": 141
+            },
+            {
+              "text": "ere",
+              "confidence": 42.0,
+              "top": 327,
+              "left": 166
+            },
+            {
+              "text": "Vind ee Ded",
+              "confidence": 47.666666666666664,
+              "top": 338,
+              "left": 145
+            },
+            {
+              "text": "bt een",
+              "confidence": 44.5,
+              "top": 383,
+              "left": 204
+            },
+            {
+              "text": "2 Set",
+              "confidence": 42.0,
+              "top": 466,
+              "left": 224
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        }
+      ],
+      "export": {
+        "status": "idle",
+        "progress_percent": 0,
+        "filename": null,
+        "download_url": null,
+        "requested_at": null,
+        "completed_at": null,
+        "error": null
+      },
+      "text_export": {
+        "status": "ready",
+        "progress_percent": 100,
+        "filename": "448ca0614147-text.pdf",
+        "download_url": "/artifacts/exports/448ca0614147-text.pdf",
+        "requested_at": "2026-07-10T16:11:30.845421+00:00",
+        "completed_at": "2026-07-10T16:11:36.525569+00:00",
+        "error": null
+      },
+      "upload_path": "backend\\data\\uploads\\448ca0614147-WhatsApp Video 2026-03-27 at 10.56.04 PM.mp4"
+    },
+    {
+      "id": "cedc7ca66145",
+      "filename": "WhatsApp Video 2026-03-26 at 2.48.42 AM.mp4",
+      "processing_mode": "camera",
+      "status": "ready",
+      "created_at": "2026-07-10T16:12:29.200511+00:00",
+      "updated_at": "2026-07-10T16:12:32.464113+00:00",
+      "started_at": "2026-07-10T16:12:29.206741+00:00",
+      "completed_at": "2026-07-10T16:12:32.464113+00:00",
+      "current_stage_key": "extract_text",
+      "progress": {
+        "percent": 100,
+        "message": "Pages are ready for review."
+      },
+      "notes": [
+        "Pipeline completed in camera mode with background execution.",
+        "Pages can now be reviewed, reordered, rotated, deleted, and exported through backend-backed state.",
+        "Processed video at 29.61 fps, 478x850, duration 23.0s.",
+        "Sampled 68 frames and detected 0 stable page segments.",
+        "Selected 0 representative frames, collapsed to 0 sequence-stable candidates, removed 0 duplicates, and kept 0 pages after deduplication.",
+        "Extracted text from 0 unique pages (0 with text)."
+      ],
+      "stages": [
+        {
+          "key": "sample_frames",
+          "label": "Sample frames from the uploaded video",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T16:12:29.208217+00:00",
+          "completed_at": "2026-07-10T16:12:31.946833+00:00"
+        },
+        {
+          "key": "detect_segments",
+          "label": "Detect stable page-view segments",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T16:12:31.950838+00:00",
+          "completed_at": "2026-07-10T16:12:32.327618+00:00"
+        },
+        {
+          "key": "select_frames",
+          "label": "Select the clearest frame per segment",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T16:12:32.330632+00:00",
+          "completed_at": "2026-07-10T16:12:32.333170+00:00"
+        },
+        {
+          "key": "remove_duplicates",
+          "label": "Remove duplicate or weak pages",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T16:12:32.337347+00:00",
+          "completed_at": "2026-07-10T16:12:32.340906+00:00"
+        },
+        {
+          "key": "prepare_previews",
+          "label": "Prepare preview metadata",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T16:12:32.345938+00:00",
+          "completed_at": "2026-07-10T16:12:32.354236+00:00"
+        },
+        {
+          "key": "extract_text",
+          "label": "Extract text from unique page frames",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T16:12:32.457387+00:00",
+          "completed_at": "2026-07-10T16:12:32.460998+00:00"
+        }
+      ],
+      "pages": [],
+      "export": {
+        "status": "idle",
+        "progress_percent": 0,
+        "filename": null,
+        "download_url": null,
+        "requested_at": null,
+        "completed_at": null,
+        "error": null
+      },
+      "text_export": {
+        "status": "idle",
+        "progress_percent": 0,
+        "filename": null,
+        "download_url": null,
+        "requested_at": null,
+        "completed_at": null,
+        "error": null
+      },
+      "upload_path": "backend\\data\\uploads\\cedc7ca66145-WhatsApp Video 2026-03-26 at 2.48.42 AM.mp4"
     }
   ]
 }

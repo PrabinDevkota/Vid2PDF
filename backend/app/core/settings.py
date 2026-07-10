@@ -46,8 +46,8 @@ class Settings(BaseModel):
     quality_debug_max_rejected_frames: int = 12
     quality_debug_max_kept_pages: int = 12
     public_artifact_base_url: str = "/artifacts"
-    tesseract_cmd: str | None = None
-    # Absolute path avoids stale PATH in long-lived uvicorn processes on Windows.
+    # Absolute paths avoid stale PATH in long-lived uvicorn processes on Windows.
+    tesseract_cmd: str | None = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
     tectonic_cmd: str = r"C:\Users\prabi\AppData\Local\Programs\tectonic\tectonic.exe"
     ocr_language: str = "eng"
     ocr_min_confidence: float = 40.0

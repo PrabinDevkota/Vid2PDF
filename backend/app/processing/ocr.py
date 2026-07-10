@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import shutil
 from dataclasses import dataclass, field
@@ -37,19 +38,51 @@ class PageText:
     error: str | None = None
 
 
+def resolve_tesseract_cmd() -> str:
+    """Resolve the Tesseract binary even if the process PATH is stale."""
+    candidates: list[str] = []
+    if settings.tesseract_cmd:
+        candidates.append(settings.tesseract_cmd)
+
+    which = shutil.which("tesseract")
+    if which:
+        candidates.append(which)
+
+    local_app_data = Path(os.environ.get("LOCALAPPDATA", ""))
+    candidates.extend(
+        [
+            r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+            r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+            str(local_app_data / "Programs" / "Tesseract-OCR" / "tesseract.exe"),
+        ]
+    )
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        path = Path(candidate)
+        if path.is_file():
+            return str(path.resolve())
+        resolved = shutil.which(candidate)
+        if resolved:
+            return resolved
+
+    raise RuntimeError(
+        "Tesseract OCR binary was not found. "
+        "Install Tesseract (https://github.com/UB-Mannheim/tesseract/wiki) "
+        "or set settings.tesseract_cmd to the full path of tesseract.exe."
+    )
+
+
 def configure_tesseract() -> None:
     if pytesseract is None:
         raise RuntimeError(
             "pytesseract is not installed. Run: pip install pytesseract"
         )
-    if settings.tesseract_cmd:
-        pytesseract.pytesseract.tesseract_cmd = settings.tesseract_cmd
-    elif shutil.which("tesseract") is None:
-        raise RuntimeError(
-            "Tesseract OCR binary was not found on PATH. "
-            "Install Tesseract and ensure `tesseract` is available, "
-            "or set settings.tesseract_cmd."
-        )
+    tesseract_path = resolve_tesseract_cmd()
+    pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
 
 def extract_page_text(
