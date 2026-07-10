@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -22,15 +23,42 @@ class TextExportArtifact:
 
 
 def ensure_tectonic_available() -> str:
-    cmd = settings.tectonic_cmd
-    resolved = shutil.which(cmd)
-    if resolved is None:
-        raise RuntimeError(
-            f"Tectonic compiler `{cmd}` was not found on PATH. "
-            "Install Tectonic (https://tectonic-typesetting.github.io/) "
-            "and ensure it is available, or set settings.tectonic_cmd."
-        )
-    return resolved
+    """Resolve the Tectonic binary even if the process PATH is stale."""
+    candidates: list[str] = []
+    cmd = (settings.tectonic_cmd or "tectonic").strip()
+    candidates.append(cmd)
+
+    which = shutil.which(cmd)
+    if which:
+        candidates.append(which)
+
+    local_app_data = Path(os.environ.get("LOCALAPPDATA", ""))
+    candidates.extend(
+        [
+            str(local_app_data / "Programs" / "tectonic" / "tectonic.exe"),
+            str(Path.home() / "AppData" / "Local" / "Programs" / "tectonic" / "tectonic.exe"),
+            r"C:\Program Files\tectonic\tectonic.exe",
+        ]
+    )
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        path = Path(candidate)
+        if path.is_file():
+            return str(path.resolve())
+        resolved = shutil.which(candidate)
+        if resolved:
+            return resolved
+
+    raise RuntimeError(
+        f"Tectonic compiler `{cmd}` was not found on PATH. "
+        "Install Tectonic (https://tectonic-typesetting.github.io/) "
+        "and ensure it is available, or set settings.tectonic_cmd to the full "
+        r"path (e.g. C:\Users\<you>\AppData\Local\Programs\tectonic\tectonic.exe)."
+    )
 
 
 def compile_latex_with_tectonic(

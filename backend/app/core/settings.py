@@ -47,7 +47,8 @@ class Settings(BaseModel):
     quality_debug_max_kept_pages: int = 12
     public_artifact_base_url: str = "/artifacts"
     tesseract_cmd: str | None = None
-    tectonic_cmd: str = "tectonic"
+    # Absolute path avoids stale PATH in long-lived uvicorn processes on Windows.
+    tectonic_cmd: str = r"C:\Users\prabi\AppData\Local\Programs\tectonic\tectonic.exe"
     ocr_language: str = "eng"
     ocr_min_confidence: float = 40.0
     ocr_consecutive_duplicate_similarity: float = 0.92

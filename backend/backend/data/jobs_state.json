@@ -720,7 +720,7 @@
       "processing_mode": "screen",
       "status": "ready",
       "created_at": "2026-07-10T15:54:06.163053+00:00",
-      "updated_at": "2026-07-10T15:55:08.030732+00:00",
+      "updated_at": "2026-07-10T16:07:57.343176+00:00",
       "started_at": "2026-07-10T15:54:06.173372+00:00",
       "completed_at": "2026-07-10T15:54:11.293049+00:00",
       "current_stage_key": "extract_text",
@@ -830,7 +830,7 @@
           "ocr_text": null,
           "ocr_blocks": [],
           "ocr_status": "failed",
-          "ocr_error": "pytesseract is not installed. Run: pip install pytesseract"
+          "ocr_error": "Tesseract OCR binary was not found on PATH. Install Tesseract and ensure `tesseract` is available, or set settings.tesseract_cmd."
         },
         {
           "id": "page-2",
@@ -860,7 +860,7 @@
           "ocr_text": null,
           "ocr_blocks": [],
           "ocr_status": "failed",
-          "ocr_error": "pytesseract is not installed. Run: pip install pytesseract"
+          "ocr_error": "Tesseract OCR binary was not found on PATH. Install Tesseract and ensure `tesseract` is available, or set settings.tesseract_cmd."
         },
         {
           "id": "page-3",
@@ -890,7 +890,7 @@
           "ocr_text": null,
           "ocr_blocks": [],
           "ocr_status": "failed",
-          "ocr_error": "pytesseract is not installed. Run: pip install pytesseract"
+          "ocr_error": "Tesseract OCR binary was not found on PATH. Install Tesseract and ensure `tesseract` is available, or set settings.tesseract_cmd."
         },
         {
           "id": "page-4",
@@ -920,7 +920,7 @@
           "ocr_text": null,
           "ocr_blocks": [],
           "ocr_status": "failed",
-          "ocr_error": "pytesseract is not installed. Run: pip install pytesseract"
+          "ocr_error": "Tesseract OCR binary was not found on PATH. Install Tesseract and ensure `tesseract` is available, or set settings.tesseract_cmd."
         },
         {
           "id": "page-5",
@@ -950,7 +950,7 @@
           "ocr_text": null,
           "ocr_blocks": [],
           "ocr_status": "failed",
-          "ocr_error": "pytesseract is not installed. Run: pip install pytesseract"
+          "ocr_error": "Tesseract OCR binary was not found on PATH. Install Tesseract and ensure `tesseract` is available, or set settings.tesseract_cmd."
         }
       ],
       "export": {
@@ -963,13 +963,13 @@
         "error": null
       },
       "text_export": {
-        "status": "failed",
+        "status": "ready",
         "progress_percent": 100,
-        "filename": null,
-        "download_url": null,
-        "requested_at": "2026-07-10T15:55:08.011245+00:00",
-        "completed_at": null,
-        "error": "Tectonic compiler `tectonic` was not found on PATH. Install Tectonic (https://tectonic-typesetting.github.io/) and ensure it is available, or set settings.tectonic_cmd."
+        "filename": "1077af3d15df-text.pdf",
+        "download_url": "/artifacts/exports/1077af3d15df-text.pdf",
+        "requested_at": "2026-07-10T16:07:52.472380+00:00",
+        "completed_at": "2026-07-10T16:07:57.343176+00:00",
+        "error": null
       },
       "upload_path": "backend\\data\\uploads\\1077af3d15df-WhatsApp Video 2026-03-26 at 2.48.42 AM.mp4"
     }
