@@ -16,7 +16,12 @@ const STEPS: StepDef[] = [
 ];
 
 function getActiveStep(job: ProcessingJob): WorkflowStep {
-  if (job.export.status === "ready" || job.export.status === "processing") {
+  if (
+    job.export.status === "ready" ||
+    job.export.status === "processing" ||
+    job.textExport?.status === "ready" ||
+    job.textExport?.status === "processing"
+  ) {
     return "export";
   }
   if (job.status === "ready") {
@@ -40,15 +45,18 @@ function getStepState(
   if (stepIndex < activeIndex) {
     return "complete";
   }
-  if (stepIndex === activeIndex) {
-    if (step === "process" && job.status === "failed") {
+    if (stepIndex === activeIndex) {
+      if (step === "process" && job.status === "failed") {
+        return "active";
+      }
+      if (
+        step === "export" &&
+        (job.export.status === "failed" || job.textExport?.status === "failed")
+      ) {
+        return "active";
+      }
       return "active";
     }
-    if (step === "export" && job.export.status === "failed") {
-      return "active";
-    }
-    return "active";
-  }
   return "pending";
 }
 
@@ -72,7 +80,8 @@ export function WorkflowStepper({ job }: WorkflowStepperProps) {
                 ) : state === "active" &&
                   (job.status === "processing" ||
                     job.status === "queued" ||
-                    job.export.status === "processing") ? (
+                    job.export.status === "processing" ||
+                    job.textExport?.status === "processing") ? (
                   <Loader2 size={14} className="spin" />
                 ) : (
                   <Circle size={10} />

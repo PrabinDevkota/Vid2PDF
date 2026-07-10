@@ -7,6 +7,7 @@ StageStatus = Literal["pending", "processing", "complete", "failed"]
 PageStatus = Literal["active", "deleted"]
 ExportStatus = Literal["idle", "processing", "ready", "failed"]
 ProcessingMode = Literal["screen", "camera"]
+OcrStatus = Literal["pending", "ready", "failed", "empty"]
 
 
 @dataclass
@@ -63,6 +64,13 @@ class PageEdits:
     blur_regions: list[BlurRegion] = field(default_factory=list)
 
 
+@dataclass
+class OcrBlock:
+    text: str
+    confidence: float
+    top: int
+    left: int
+
 
 @dataclass
 class Stage:
@@ -94,6 +102,10 @@ class Page:
     deleted: bool = False
     source_image_url: str | None = None
     edits: PageEdits = field(default_factory=PageEdits)
+    ocr_text: str | None = None
+    ocr_blocks: list[OcrBlock] = field(default_factory=list)
+    ocr_status: OcrStatus = "pending"
+    ocr_error: str | None = None
 
 
 @dataclass
@@ -105,7 +117,6 @@ class ExportArtifact:
     requested_at: datetime | None = None
     completed_at: datetime | None = None
     error: str | None = None
-
 
 
 @dataclass
@@ -124,4 +135,5 @@ class Job:
     stages: list[Stage] = field(default_factory=list)
     pages: list[Page] = field(default_factory=list)
     export: ExportArtifact = field(default_factory=ExportArtifact)
+    text_export: ExportArtifact = field(default_factory=ExportArtifact)
     upload_path: str | None = None

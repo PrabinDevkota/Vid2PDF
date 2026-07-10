@@ -111,6 +111,14 @@ export async function startExport(jobId: string): Promise<ProcessingJob["export"
   return readJson<ProcessingJob["export"]>(response, "Failed to start export");
 }
 
+export async function startTextExport(jobId: string): Promise<ProcessingJob["textExport"]> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/export/text`, {
+    method: "POST",
+  });
+
+  return readJson<ProcessingJob["textExport"]>(response, "Failed to start text export");
+}
+
 export function resolveArtifactUrl(url: string | null): string | null {
   if (!url) {
     return null;

@@ -18,6 +18,7 @@ from app.models.job import (
     EditPoint,
     ExportArtifact,
     Job,
+    OcrBlock,
     Page,
     PageEdits,
     ProcessingMode,
@@ -30,7 +31,14 @@ from app.processing.deduper import remove_duplicates
 from app.processing.debug import write_pipeline_debug_report
 from app.processing.document import detect_document_region
 from app.processing.editor import write_rendered_page
-from app.processing.pipeline import PIPELINE_STAGES, build_export
+from app.processing.ocr import PageText, TextBlock, extract_page_text
+from app.processing.pipeline import (
+    PIPELINE_STAGES,
+    build_export,
+    build_text_export,
+    collect_ocr_duplicate_notes,
+    ocr_selected_pages,
+)
 from app.processing.preview import attach_previews
 from app.processing.scoring import compute_frame_quality
 from app.processing.sampler import load_video_metadata, sample_frames
@@ -47,6 +55,7 @@ from app.schemas.job import (
     EditPointPayload,
     ExportResponse,
     JobResponse,
+    OcrBlockPayload,
     PageResponse,
     PageEditsPayload,
     ProgressResponse,
@@ -141,6 +150,7 @@ class JobService:
 
             if needs_rerender and page.source_image_url and page.image_url and page.thumbnail_url:
                 self._render_page_artifacts(page)
+                self._apply_ocr_to_page(page)
 
             self._invalidate_export(job)
             job.updated_at = datetime.now(timezone.utc)
@@ -227,12 +237,18 @@ class JobService:
         )
         context = build_pipeline_context(job_id=job_id, upload_path=upload_path, processing_mode=processing_mode)
         attach_previews([manual_page], context=context)
+        ocr_result = extract_page_text(
+            manual_page.image_path,
+            page_id=manual_page.page_id,
+            page_number=0,
+        )
 
         with self._lock:
             job = self._jobs.get(job_id)
             if job is None:
                 return None
             next_index = len(job.pages)
+            ocr_result.page_number = next_index + 1
             job.pages.append(
                 Page(
                     id=manual_page.page_id,
@@ -249,6 +265,7 @@ class JobService:
                     source_timestamp=manual_page.selected_frame.timestamp,
                     manual=True,
                     source_image_url=self._build_source_image_url(job.id, manual_page.page_id),
+                    **self._ocr_fields_from_result(ocr_result),
                 )
             )
             job.notes.append(f"Manual page added at {timestamp:.2f}s from the source video.")
@@ -297,6 +314,27 @@ class JobService:
 
         self._executor.submit(self._run_export_job, job_id)
         return self._to_export_response(job.export)
+
+    def export_text_job(self, job_id: str) -> ExportResponse | None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return None
+
+            if job.text_export.status == "processing":
+                return self._to_export_response(job.text_export)
+
+            now = datetime.now(timezone.utc)
+            job.text_export = ExportArtifact(
+                status="processing",
+                progress_percent=5,
+                requested_at=now,
+            )
+            job.updated_at = now
+            self._save_jobs()
+
+        self._executor.submit(self._run_text_export_job, job_id)
+        return self._to_export_response(job.text_export)
 
     def _run_pipeline_job(self, job_id: str) -> None:
         with self._lock:
@@ -369,7 +407,7 @@ class JobService:
 
             self._start_stage(job_id, "prepare_previews", "Writing page previews and final page images.", 86)
             preview_pages = attach_previews(unique_pages, context=context)
-            self._complete_stage(job_id, "prepare_previews", 96, "Preview artifacts written.")
+            self._complete_stage(job_id, "prepare_previews", 90, "Preview artifacts written.")
             write_pipeline_debug_report(
                 context=context,
                 sampled_frames=sampled_frames,
@@ -379,6 +417,20 @@ class JobService:
                 deduped_pages=preview_pages,
             )
 
+            self._start_stage(job_id, "extract_text", "Extracting text from unique page frames.", 92)
+            ocr_results = ocr_selected_pages(preview_pages)
+            ocr_notes = collect_ocr_duplicate_notes(ocr_results)
+            ready_count = sum(1 for item in ocr_results if item.status == "ready")
+            empty_count = sum(1 for item in ocr_results if item.status == "empty")
+            failed_count = sum(1 for item in ocr_results if item.status == "failed")
+            self._complete_stage(
+                job_id,
+                "extract_text",
+                98,
+                f"OCR complete: {ready_count} ready, {empty_count} empty, {failed_count} failed.",
+            )
+            ocr_by_page_id = {item.page_id: item for item in ocr_results}
+
             with self._lock:
                 job = self._jobs[job_id]
                 job.notes = [
@@ -387,7 +439,9 @@ class JobService:
                     f"Processed video at {metadata.fps:.2f} fps, {metadata.width}x{metadata.height}, duration {metadata.duration_seconds:.1f}s.",
                     f"Sampled {len(sampled_frames)} frames and detected {len(segments)} stable page segments.",
                     f"Selected {len(selected_pages)} representative frames, collapsed to {len(sequence_pages)} sequence-stable candidates, removed {len(sequence_pages) - len(preview_pages)} duplicates, and kept {len(preview_pages)} pages after deduplication.",
+                    f"Extracted text from {len(ocr_results)} unique pages ({ready_count} with text).",
                 ]
+                job.notes.extend(ocr_notes)
                 job.pages = [
                     Page(
                         id=page.page_id,
@@ -403,6 +457,7 @@ class JobService:
                         source_frame_index=page.selected_frame.frame_index,
                         source_timestamp=page.selected_frame.timestamp,
                         source_image_url=self._build_source_image_url(job.id, page.page_id),
+                        **self._ocr_fields_from_result(ocr_by_page_id.get(page.page_id)),
                     )
                     for index, page in enumerate(preview_pages)
                 ]
@@ -482,6 +537,167 @@ class JobService:
             job.updated_at = job.export.completed_at
             self._save_jobs()
 
+    def _run_text_export_job(self, job_id: str) -> None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return
+            active_pages = [
+                page for page in sorted(job.pages, key=lambda item: item.order_index) if not page.deleted
+            ]
+            if not active_pages:
+                job.text_export.status = "failed"
+                job.text_export.error = "No active pages available for text export."
+                job.updated_at = datetime.now(timezone.utc)
+                self._save_jobs()
+                return
+            filename = job.filename
+            job.text_export.progress_percent = 20
+            self._save_jobs()
+
+        try:
+            page_texts: list[PageText] = []
+            for index, page in enumerate(active_pages):
+                page_text = self._ensure_page_ocr(page, page_number=index + 1)
+                page_texts.append(page_text)
+
+            with self._lock:
+                job = self._jobs.get(job_id)
+                if job is None:
+                    return
+                for page, page_text in zip(active_pages, page_texts, strict=False):
+                    stored = next((item for item in job.pages if item.id == page.id), None)
+                    if stored is not None:
+                        self._assign_ocr_result(stored, page_text)
+                duplicate_notes = collect_ocr_duplicate_notes(page_texts)
+                for note in duplicate_notes:
+                    if note not in job.notes:
+                        job.notes.append(note)
+                job.text_export.progress_percent = 55
+                self._save_jobs()
+
+            artifact = build_text_export(
+                job_id=job_id,
+                pages=page_texts,
+                output_dir=str(self._exports_root),
+                title=Path(filename).stem or "Vid2PDF Export",
+                source_filename=filename,
+            )
+        except Exception as exc:
+            with self._lock:
+                job = self._jobs.get(job_id)
+                if job is None:
+                    return
+                job.text_export.status = "failed"
+                job.text_export.progress_percent = 100
+                job.text_export.error = str(exc)
+                job.updated_at = datetime.now(timezone.utc)
+                self._save_jobs()
+            return
+
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return
+            job.text_export.status = "ready"
+            job.text_export.progress_percent = 100
+            job.text_export.filename = artifact.filename
+            job.text_export.download_url = (
+                f"{settings.public_artifact_base_url}/exports/{artifact.filename}"
+            )
+            job.text_export.completed_at = datetime.now(timezone.utc)
+            job.text_export.error = None
+            job.updated_at = job.text_export.completed_at
+            self._save_jobs()
+
+    def _ensure_page_ocr(self, page: Page, *, page_number: int) -> PageText:
+        if page.ocr_status in {"ready", "empty"} and page.ocr_text is not None:
+            return PageText(
+                page_id=page.id,
+                page_number=page_number,
+                blocks=[
+                    TextBlock(
+                        text=block.text,
+                        confidence=block.confidence,
+                        top=block.top,
+                        left=block.left,
+                    )
+                    for block in page.ocr_blocks
+                ],
+                raw_text=page.ocr_text,
+                status=page.ocr_status,
+                error=page.ocr_error,
+            )
+
+        if not page.image_url:
+            return PageText(
+                page_id=page.id,
+                page_number=page_number,
+                status="failed",
+                error="Page image is missing for OCR.",
+            )
+
+        image_path = str(self._resolve_storage_path(page.image_url))
+        return extract_page_text(
+            image_path,
+            page_id=page.id,
+            page_number=page_number,
+        )
+
+    def _apply_ocr_to_page(self, page: Page) -> None:
+        if not page.image_url:
+            page.ocr_status = "failed"
+            page.ocr_error = "Page image is missing for OCR."
+            page.ocr_text = None
+            page.ocr_blocks = []
+            return
+        result = extract_page_text(
+            str(self._resolve_storage_path(page.image_url)),
+            page_id=page.id,
+            page_number=page.page_number,
+        )
+        self._assign_ocr_result(page, result)
+
+    def _assign_ocr_result(self, page: Page, result: PageText) -> None:
+        page.ocr_text = result.raw_text if result.status in {"ready", "empty"} else None
+        page.ocr_blocks = [
+            OcrBlock(
+                text=block.text,
+                confidence=block.confidence,
+                top=block.top,
+                left=block.left,
+            )
+            for block in result.blocks
+        ]
+        if result.status in {"ready", "empty", "failed"}:
+            page.ocr_status = result.status  # type: ignore[assignment]
+        else:
+            page.ocr_status = "failed"
+        page.ocr_error = result.error
+
+    def _ocr_fields_from_result(self, result: PageText | None) -> dict:
+        if result is None:
+            return {
+                "ocr_text": None,
+                "ocr_blocks": [],
+                "ocr_status": "pending",
+                "ocr_error": None,
+            }
+        return {
+            "ocr_text": result.raw_text if result.status in {"ready", "empty"} else None,
+            "ocr_blocks": [
+                OcrBlock(
+                    text=block.text,
+                    confidence=block.confidence,
+                    top=block.top,
+                    left=block.left,
+                )
+                for block in result.blocks
+            ],
+            "ocr_status": result.status if result.status in {"ready", "empty", "failed"} else "failed",
+            "ocr_error": result.error,
+        }
+
     def _start_stage(self, job_id: str, stage_key: str, message: str, progress_percent: int) -> None:
         with self._lock:
             job = self._jobs[job_id]
@@ -555,6 +771,10 @@ class JobService:
                 if job.export.status == "processing":
                     job.export.status = "failed"
                     job.export.error = "Export interrupted by server restart."
+                    changed = True
+                if job.text_export.status == "processing":
+                    job.text_export.status = "failed"
+                    job.text_export.error = "Text export interrupted by server restart."
                     changed = True
             if changed:
                 self._save_jobs()
@@ -698,10 +918,23 @@ class JobService:
                     status=page.status,
                     deleted=page.deleted,
                     edits=self._to_page_edits_response(page.edits),
+                    ocrText=page.ocr_text,
+                    ocrBlocks=[
+                        OcrBlockPayload(
+                            text=block.text,
+                            confidence=block.confidence,
+                            top=block.top,
+                            left=block.left,
+                        )
+                        for block in page.ocr_blocks
+                    ],
+                    ocrStatus=page.ocr_status,
+                    ocrError=page.ocr_error,
                 )
                 for page in pages
             ],
             export=self._to_export_response(job.export),
+            textExport=self._to_export_response(job.text_export),
         )
 
     def _to_export_response(self, export: ExportArtifact) -> ExportResponse:
@@ -940,6 +1173,7 @@ class JobService:
 
     def _invalidate_export(self, job: Job) -> None:
         job.export = ExportArtifact()
+        job.text_export = ExportArtifact()
 
     def _save_jobs(self) -> None:
         payload = {"jobs": [self._serialize_job(job) for job in self._jobs.values()]}
@@ -1006,6 +1240,18 @@ class JobService:
                     "deleted": page.deleted,
                     "source_image_url": page.source_image_url,
                     "edits": self._serialize_page_edits(page.edits),
+                    "ocr_text": page.ocr_text,
+                    "ocr_blocks": [
+                        {
+                            "text": block.text,
+                            "confidence": block.confidence,
+                            "top": block.top,
+                            "left": block.left,
+                        }
+                        for block in page.ocr_blocks
+                    ],
+                    "ocr_status": page.ocr_status,
+                    "ocr_error": page.ocr_error,
                 }
                 for page in job.pages
             ],
@@ -1018,12 +1264,22 @@ class JobService:
                 "completed_at": self._serialize_datetime(job.export.completed_at),
                 "error": job.export.error,
             },
+            "text_export": {
+                "status": job.text_export.status,
+                "progress_percent": job.text_export.progress_percent,
+                "filename": job.text_export.filename,
+                "download_url": job.text_export.download_url,
+                "requested_at": self._serialize_datetime(job.text_export.requested_at),
+                "completed_at": self._serialize_datetime(job.text_export.completed_at),
+                "error": job.text_export.error,
+            },
             "upload_path": job.upload_path,
         }
 
     def _deserialize_job(self, payload: dict[str, object]) -> Job:
         progress_payload = payload.get("progress", {})
         export_payload = payload.get("export", {})
+        text_export_payload = payload.get("text_export", {})
         return Job(
             id=str(payload["id"]),
             filename=str(payload["filename"]),
@@ -1070,6 +1326,18 @@ class JobService:
                     deleted=bool(page.get("deleted", False)),
                     source_image_url=page.get("source_image_url", page.get("image_url")),  # type: ignore[arg-type]
                     edits=self._deserialize_page_edits(page.get("edits")),
+                    ocr_text=page.get("ocr_text"),  # type: ignore[arg-type]
+                    ocr_blocks=[
+                        OcrBlock(
+                            text=str(block.get("text", "")),
+                            confidence=float(block.get("confidence", 0)),
+                            top=int(block.get("top", 0)),
+                            left=int(block.get("left", 0)),
+                        )
+                        for block in page.get("ocr_blocks", [])  # type: ignore[union-attr]
+                    ],
+                    ocr_status=page.get("ocr_status", "pending"),  # type: ignore[arg-type]
+                    ocr_error=page.get("ocr_error"),  # type: ignore[arg-type]
                 )
                 for page in payload.get("pages", [])  # type: ignore[arg-type]
             ],
@@ -1081,6 +1349,15 @@ class JobService:
                 requested_at=self._deserialize_datetime(export_payload.get("requested_at")),  # type: ignore[union-attr]
                 completed_at=self._deserialize_datetime(export_payload.get("completed_at")),  # type: ignore[union-attr]
                 error=export_payload.get("error"),  # type: ignore[arg-type]
+            ),
+            text_export=ExportArtifact(
+                status=text_export_payload.get("status", "idle") if isinstance(text_export_payload, dict) else "idle",  # type: ignore[arg-type]
+                progress_percent=int(text_export_payload.get("progress_percent", 0)) if isinstance(text_export_payload, dict) else 0,  # type: ignore[union-attr]
+                filename=text_export_payload.get("filename") if isinstance(text_export_payload, dict) else None,  # type: ignore[arg-type]
+                download_url=text_export_payload.get("download_url") if isinstance(text_export_payload, dict) else None,  # type: ignore[arg-type]
+                requested_at=self._deserialize_datetime(text_export_payload.get("requested_at")) if isinstance(text_export_payload, dict) else None,  # type: ignore[union-attr]
+                completed_at=self._deserialize_datetime(text_export_payload.get("completed_at")) if isinstance(text_export_payload, dict) else None,  # type: ignore[union-attr]
+                error=text_export_payload.get("error") if isinstance(text_export_payload, dict) else None,  # type: ignore[arg-type]
             ),
             upload_path=payload.get("upload_path"),  # type: ignore[arg-type]
         )

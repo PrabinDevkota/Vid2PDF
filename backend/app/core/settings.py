@@ -46,6 +46,11 @@ class Settings(BaseModel):
     quality_debug_max_rejected_frames: int = 12
     quality_debug_max_kept_pages: int = 12
     public_artifact_base_url: str = "/artifacts"
+    tesseract_cmd: str | None = None
+    tectonic_cmd: str = "tectonic"
+    ocr_language: str = "eng"
+    ocr_min_confidence: float = 40.0
+    ocr_consecutive_duplicate_similarity: float = 0.92
 
 
 settings = Settings()

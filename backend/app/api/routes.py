@@ -44,6 +44,14 @@ def export_job(job_id: str) -> ExportResponse:
     return export_result
 
 
+@router.post("/jobs/{job_id}/export/text", response_model=ExportResponse)
+def export_text_job(job_id: str) -> ExportResponse:
+    export_result = job_service.export_text_job(job_id)
+    if export_result is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return export_result
+
+
 @router.patch("/jobs/{job_id}/pages/{page_id}", response_model=JobResponse)
 def update_page(job_id: str, page_id: str, payload: UpdatePageRequest) -> JobResponse:
     job = job_service.update_page(job_id, page_id, payload)

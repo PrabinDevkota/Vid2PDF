@@ -54,6 +54,13 @@ class UpdatePageEditsPayload(BaseModel):
     blurRegions: list[BlurRegionPayload] = []
 
 
+class OcrBlockPayload(BaseModel):
+    text: str
+    confidence: float
+    top: int
+    left: int
+
+
 class ProgressResponse(BaseModel):
     percent: int
     message: str
@@ -87,6 +94,10 @@ class PageResponse(BaseModel):
     status: Literal["active", "deleted"]
     deleted: bool
     edits: PageEditsPayload
+    ocrText: str | None = None
+    ocrBlocks: list[OcrBlockPayload] = []
+    ocrStatus: Literal["pending", "ready", "failed", "empty"] = "pending"
+    ocrError: str | None = None
 
 
 class ExportResponse(BaseModel):
@@ -115,6 +126,7 @@ class JobResponse(BaseModel):
     stages: list[StageResponse]
     pages: list[PageResponse]
     export: ExportResponse
+    textExport: ExportResponse
 
 
 class UpdatePageRequest(BaseModel):

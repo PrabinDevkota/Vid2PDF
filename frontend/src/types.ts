@@ -3,6 +3,7 @@ export type StageStatus = "pending" | "processing" | "complete" | "failed";
 export type PageStatus = "active" | "deleted";
 export type ExportStatus = "idle" | "processing" | "ready" | "failed";
 export type ProcessingMode = "screen" | "camera";
+export type OcrStatus = "pending" | "ready" | "failed" | "empty";
 
 export interface EditPoint {
   x: number;
@@ -46,6 +47,13 @@ export interface PageEdits {
   blurRegions: BlurRegion[];
 }
 
+export interface OcrBlock {
+  text: string;
+  confidence: number;
+  top: number;
+  left: number;
+}
+
 export interface ProgressState {
   percent: number;
   message: string;
@@ -79,6 +87,10 @@ export interface ExtractedPage {
   status: PageStatus;
   deleted: boolean;
   edits: PageEdits;
+  ocrText: string | null;
+  ocrBlocks: OcrBlock[];
+  ocrStatus: OcrStatus;
+  ocrError: string | null;
 }
 
 export interface ExportState {
@@ -107,4 +119,5 @@ export interface ProcessingJob {
   stages: ProcessingStage[];
   pages: ExtractedPage[];
   export: ExportState;
+  textExport: ExportState;
 }

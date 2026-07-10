@@ -477,6 +477,17 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                                 Edited
                               </span>
                             ) : null}
+                            {page.ocrStatus === "ready" ? (
+                              <span className="page-origin-badge page-origin-badge--manual">
+                                OCR
+                              </span>
+                            ) : page.ocrStatus === "empty" ? (
+                              <span className="page-origin-badge">No text</span>
+                            ) : page.ocrStatus === "failed" ? (
+                              <span className="page-origin-badge page-origin-badge--edited">
+                                OCR failed
+                              </span>
+                            ) : null}
                           </div>
                           <span className="page-score">
                             {page.sharpnessScore.toFixed(2)}

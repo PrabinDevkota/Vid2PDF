@@ -1,18 +1,20 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Download, Loader2 } from "lucide-react";
+import { Download, FileText, Loader2 } from "lucide-react";
 import { AppHeader } from "../../components/AppHeader";
 import { WorkflowStepper } from "../../components/WorkflowStepper";
 import { useToast } from "../../components/Toast";
 import { PageReviewBoard } from "../pages/PageReviewBoard";
 import { useJobs } from "../../hooks/useJobs";
-import { resolveArtifactUrl, startExport } from "../../lib/api";
+import { resolveArtifactUrl, startExport, startTextExport } from "../../lib/api";
+import type { ProcessingJob } from "../../types";
 
-function needsPolling(job: { status: string; export: { status: string } } | null): boolean {
+function needsPolling(job: ProcessingJob | null): boolean {
   return (
     job?.status === "queued" ||
     job?.status === "processing" ||
-    job?.export.status === "processing"
+    job?.export.status === "processing" ||
+    job?.textExport?.status === "processing"
   );
 }
 
@@ -20,6 +22,7 @@ export function ReviewPage() {
   const { toast } = useToast();
   const { activeJob, loadError, handleJobUpdated } = useJobs();
   const [isExporting, setIsExporting] = useState(false);
+  const [isTextExporting, setIsTextExporting] = useState(false);
 
   async function handleExport() {
     if (!activeJob) {
@@ -32,8 +35,8 @@ export function ReviewPage() {
       handleJobUpdated({ ...activeJob, export: exportState });
       toast(
         exportState.status === "ready"
-          ? "PDF export is ready to download."
-          : "Export started — preparing your PDF.",
+          ? "Image PDF is ready to download."
+          : "Image PDF export started.",
         "success",
       );
     } catch (error) {
@@ -41,6 +44,30 @@ export function ReviewPage() {
       toast(message, "error");
     } finally {
       setIsExporting(false);
+    }
+  }
+
+  async function handleTextExport() {
+    if (!activeJob) {
+      return;
+    }
+
+    setIsTextExporting(true);
+    try {
+      const textExport = await startTextExport(activeJob.id);
+      handleJobUpdated({ ...activeJob, textExport });
+      toast(
+        textExport.status === "ready"
+          ? "Text PDF is ready to download."
+          : "Text PDF export started — OCR + LaTeX compile.",
+        "success",
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to start text export.";
+      toast(message, "error");
+    } finally {
+      setIsTextExporting(false);
     }
   }
 
@@ -58,11 +85,25 @@ export function ReviewPage() {
     );
   }
 
+  const textExport = activeJob.textExport ?? {
+    status: "idle" as const,
+    progressPercent: 0,
+    filename: null,
+    downloadUrl: null,
+    requestedAt: null,
+    completedAt: null,
+    error: null,
+  };
   const exportDownloadUrl = resolveArtifactUrl(activeJob.export.downloadUrl);
+  const textExportDownloadUrl = resolveArtifactUrl(textExport.downloadUrl);
   const canExport =
     activeJob.status === "ready" &&
     activeJob.export.status !== "processing" &&
     !isExporting;
+  const canTextExport =
+    activeJob.status === "ready" &&
+    textExport.status !== "processing" &&
+    !isTextExporting;
 
   return (
     <main className="page-content">
@@ -81,9 +122,38 @@ export function ReviewPage() {
                 rel="noreferrer"
               >
                 <Download size={16} aria-hidden="true" />
-                Download PDF
+                Image PDF
               </a>
             ) : null}
+            {textExportDownloadUrl ? (
+              <a
+                className="secondary-button"
+                href={textExportDownloadUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <FileText size={16} aria-hidden="true" />
+                Text PDF
+              </a>
+            ) : null}
+            <button
+              className="secondary-button"
+              disabled={!canTextExport}
+              onClick={() => void handleTextExport()}
+              type="button"
+            >
+              {isTextExporting || textExport.status === "processing" ? (
+                <>
+                  <Loader2 size={16} className="spin" aria-hidden="true" />
+                  Text PDF…
+                </>
+              ) : (
+                <>
+                  <FileText size={16} aria-hidden="true" />
+                  Export Text PDF
+                </>
+              )}
+            </button>
             <button
               className="primary-button"
               disabled={!canExport}
@@ -96,7 +166,7 @@ export function ReviewPage() {
                   Exporting…
                 </>
               ) : (
-                "Export PDF"
+                "Export Image PDF"
               )}
             </button>
           </div>
@@ -107,6 +177,13 @@ export function ReviewPage() {
         <div className="status-banner status-banner--error workspace-alert">
           <strong>Backend unavailable</strong>
           <span>{loadError}</span>
+        </div>
+      ) : null}
+
+      {textExport.status === "failed" && textExport.error ? (
+        <div className="status-banner status-banner--error workspace-alert">
+          <strong>Text PDF export failed</strong>
+          <span>{textExport.error}</span>
         </div>
       ) : null}
 

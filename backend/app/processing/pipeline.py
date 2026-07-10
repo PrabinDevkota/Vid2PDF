@@ -6,11 +6,13 @@ from app.processing.context import build_pipeline_context
 from app.processing.deduper import remove_duplicates
 from app.processing.debug import write_pipeline_debug_report
 from app.processing.exporter import ExportArtifact, export_pdf
+from app.processing.ocr import PageText, extract_page_text, find_consecutive_near_duplicates
 from app.processing.preview import attach_previews
 from app.processing.sampler import load_video_metadata, sample_frames
 from app.processing.sequence import collapse_sequence_candidates
 from app.processing.segmenter import detect_stable_segments
 from app.processing.selector import select_best_frames
+from app.processing.tectonic_exporter import TextExportArtifact, compile_latex_with_tectonic
 from app.processing.types import PipelineContext, SelectedPage, VideoMetadata
 
 logger = logging.getLogger(__name__)
@@ -21,6 +23,7 @@ PIPELINE_STAGES = [
     ("select_frames", "Select the clearest frame per segment"),
     ("remove_duplicates", "Remove duplicate or weak pages"),
     ("prepare_previews", "Prepare preview metadata"),
+    ("extract_text", "Extract text from unique page frames"),
 ]
 
 
@@ -30,6 +33,8 @@ class PipelineResult:
     pages: list[SelectedPage]
     video_metadata: VideoMetadata
     context: PipelineContext
+
+
 def run_reconstruction_pipeline(
     job_id: str,
     upload_path: str,
@@ -116,3 +121,44 @@ def run_reconstruction_pipeline(
 
 def build_export(job_id: str, pages: list[SelectedPage], output_dir: str) -> ExportArtifact:
     return export_pdf(job_id=job_id, pages=pages, output_dir=output_dir)
+
+
+def build_text_export(
+    job_id: str,
+    pages: list[PageText],
+    output_dir: str,
+    *,
+    title: str,
+    source_filename: str | None = None,
+) -> TextExportArtifact:
+    return compile_latex_with_tectonic(
+        job_id=job_id,
+        title=title,
+        pages=pages,
+        output_dir=output_dir,
+        source_filename=source_filename,
+    )
+
+
+def ocr_selected_pages(pages: list[SelectedPage]) -> list[PageText]:
+    """OCR each unique selected page image in order."""
+    results: list[PageText] = []
+    for page in pages:
+        results.append(
+            extract_page_text(
+                page.image_path,
+                page_id=page.page_id,
+                page_number=page.page_number,
+            )
+        )
+    return results
+
+
+def collect_ocr_duplicate_notes(pages: list[PageText]) -> list[str]:
+    notes: list[str] = []
+    for left_id, right_id, score in find_consecutive_near_duplicates(pages):
+        notes.append(
+            f"Near-duplicate OCR text between {left_id} and {right_id} "
+            f"(similarity {score:.0%}). Both pages were kept; review before export."
+        )
+    return notes

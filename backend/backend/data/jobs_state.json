@@ -73,6 +73,15 @@
         "completed_at": null,
         "error": "No active pages available for export."
       },
+      "text_export": {
+        "status": "idle",
+        "progress_percent": 0,
+        "filename": null,
+        "download_url": null,
+        "requested_at": null,
+        "completed_at": null,
+        "error": null
+      },
       "upload_path": "backend\\data\\uploads\\267caa93727f-prabin_bl.sc.u4cse24170.mp4"
     },
     {
@@ -147,6 +156,15 @@
         "requested_at": "2026-05-09T17:15:43.634663+00:00",
         "completed_at": null,
         "error": "No active pages available for export."
+      },
+      "text_export": {
+        "status": "idle",
+        "progress_percent": 0,
+        "filename": null,
+        "download_url": null,
+        "requested_at": null,
+        "completed_at": null,
+        "error": null
       },
       "upload_path": "backend\\data\\uploads\\16ecb23ca0ac-prabin_bl.sc.u4cse24170.mp4"
     },
@@ -248,7 +266,11 @@
             "strokes": [],
             "texts": [],
             "blur_regions": []
-          }
+          },
+          "ocr_text": null,
+          "ocr_blocks": [],
+          "ocr_status": "pending",
+          "ocr_error": null
         },
         {
           "id": "page-2",
@@ -274,7 +296,11 @@
             "strokes": [],
             "texts": [],
             "blur_regions": []
-          }
+          },
+          "ocr_text": null,
+          "ocr_blocks": [],
+          "ocr_status": "pending",
+          "ocr_error": null
         },
         {
           "id": "page-3",
@@ -300,7 +326,11 @@
             "strokes": [],
             "texts": [],
             "blur_regions": []
-          }
+          },
+          "ocr_text": null,
+          "ocr_blocks": [],
+          "ocr_status": "pending",
+          "ocr_error": null
         },
         {
           "id": "page-4",
@@ -326,7 +356,11 @@
             "strokes": [],
             "texts": [],
             "blur_regions": []
-          }
+          },
+          "ocr_text": null,
+          "ocr_blocks": [],
+          "ocr_status": "pending",
+          "ocr_error": null
         },
         {
           "id": "page-5",
@@ -352,7 +386,11 @@
             "strokes": [],
             "texts": [],
             "blur_regions": []
-          }
+          },
+          "ocr_text": null,
+          "ocr_blocks": [],
+          "ocr_status": "pending",
+          "ocr_error": null
         }
       ],
       "export": {
@@ -362,6 +400,15 @@
         "download_url": "/artifacts/exports/7c798086d49e.pdf",
         "requested_at": "2026-05-09T17:17:56.778033+00:00",
         "completed_at": "2026-05-09T17:17:56.921486+00:00",
+        "error": null
+      },
+      "text_export": {
+        "status": "idle",
+        "progress_percent": 0,
+        "filename": null,
+        "download_url": null,
+        "requested_at": null,
+        "completed_at": null,
         "error": null
       },
       "upload_path": "backend\\data\\uploads\\7c798086d49e-WhatsApp Video 2026-02-05 at 11.37.28 PM.mp4"
@@ -431,6 +478,15 @@
       ],
       "pages": [],
       "export": {
+        "status": "idle",
+        "progress_percent": 0,
+        "filename": null,
+        "download_url": null,
+        "requested_at": null,
+        "completed_at": null,
+        "error": null
+      },
+      "text_export": {
         "status": "idle",
         "progress_percent": 0,
         "filename": null,
@@ -541,7 +597,11 @@
             "strokes": [],
             "texts": [],
             "blur_regions": []
-          }
+          },
+          "ocr_text": null,
+          "ocr_blocks": [],
+          "ocr_status": "pending",
+          "ocr_error": null
         },
         {
           "id": "page-1",
@@ -567,7 +627,11 @@
             "strokes": [],
             "texts": [],
             "blur_regions": []
-          }
+          },
+          "ocr_text": null,
+          "ocr_blocks": [],
+          "ocr_status": "pending",
+          "ocr_error": null
         },
         {
           "id": "page-3",
@@ -593,7 +657,11 @@
             "strokes": [],
             "texts": [],
             "blur_regions": []
-          }
+          },
+          "ocr_text": null,
+          "ocr_blocks": [],
+          "ocr_status": "pending",
+          "ocr_error": null
         },
         {
           "id": "page-4",
@@ -619,7 +687,11 @@
             "strokes": [],
             "texts": [],
             "blur_regions": []
-          }
+          },
+          "ocr_text": null,
+          "ocr_blocks": [],
+          "ocr_status": "pending",
+          "ocr_error": null
         }
       ],
       "export": {
@@ -631,7 +703,275 @@
         "completed_at": null,
         "error": null
       },
+      "text_export": {
+        "status": "idle",
+        "progress_percent": 0,
+        "filename": null,
+        "download_url": null,
+        "requested_at": null,
+        "completed_at": null,
+        "error": null
+      },
       "upload_path": "backend\\data\\uploads\\0f385181ebf7-WhatsApp Video 2026-05-21 at 12.11.38 AM.mp4"
+    },
+    {
+      "id": "1077af3d15df",
+      "filename": "WhatsApp Video 2026-03-26 at 2.48.42 AM.mp4",
+      "processing_mode": "screen",
+      "status": "ready",
+      "created_at": "2026-07-10T15:54:06.163053+00:00",
+      "updated_at": "2026-07-10T15:55:08.030732+00:00",
+      "started_at": "2026-07-10T15:54:06.173372+00:00",
+      "completed_at": "2026-07-10T15:54:11.293049+00:00",
+      "current_stage_key": "extract_text",
+      "progress": {
+        "percent": 100,
+        "message": "Pages are ready for review."
+      },
+      "notes": [
+        "Pipeline completed in screen mode with background execution.",
+        "Pages can now be reviewed, reordered, rotated, deleted, and exported through backend-backed state.",
+        "Processed video at 29.61 fps, 478x850, duration 23.0s.",
+        "Sampled 98 frames and detected 5 stable page segments.",
+        "Selected 5 representative frames, collapsed to 5 sequence-stable candidates, removed 0 duplicates, and kept 5 pages after deduplication.",
+        "Extracted text from 5 unique pages (0 with text).",
+        "Page 1: Selected from 6 candidate frames.",
+        "Page 1: Segment stability delta: 0.2801",
+        "Page 1: Immutable source image stored at /artifacts/jobs/1077af3d15df/source-pages/page-1-source.png.",
+        "Page 2: Selected from 3 candidate frames.",
+        "Page 2: Segment stability delta: 0.2824",
+        "Page 2: Immutable source image stored at /artifacts/jobs/1077af3d15df/source-pages/page-2-source.png.",
+        "Page 3: Selected from 6 candidate frames.",
+        "Page 3: Segment stability delta: 0.2828",
+        "Page 3: Immutable source image stored at /artifacts/jobs/1077af3d15df/source-pages/page-3-source.png.",
+        "Page 4: Selected from 1 candidate frames.",
+        "Page 4: Segment stability delta: 0.2924",
+        "Page 4: Immutable source image stored at /artifacts/jobs/1077af3d15df/source-pages/page-4-source.png.",
+        "Page 5: Selected from 5 candidate frames.",
+        "Page 5: Segment stability delta: 0.1379",
+        "Page 5: Immutable source image stored at /artifacts/jobs/1077af3d15df/source-pages/page-5-source.png."
+      ],
+      "stages": [
+        {
+          "key": "sample_frames",
+          "label": "Sample frames from the uploaded video",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T15:54:06.176371+00:00",
+          "completed_at": "2026-07-10T15:54:09.864123+00:00"
+        },
+        {
+          "key": "detect_segments",
+          "label": "Detect stable page-view segments",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T15:54:09.867123+00:00",
+          "completed_at": "2026-07-10T15:54:10.396700+00:00"
+        },
+        {
+          "key": "select_frames",
+          "label": "Select the clearest frame per segment",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T15:54:10.399709+00:00",
+          "completed_at": "2026-07-10T15:54:10.416980+00:00"
+        },
+        {
+          "key": "remove_duplicates",
+          "label": "Remove duplicate or weak pages",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T15:54:10.419982+00:00",
+          "completed_at": "2026-07-10T15:54:10.840041+00:00"
+        },
+        {
+          "key": "prepare_previews",
+          "label": "Prepare preview metadata",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T15:54:10.843039+00:00",
+          "completed_at": "2026-07-10T15:54:11.140620+00:00"
+        },
+        {
+          "key": "extract_text",
+          "label": "Extract text from unique page frames",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T15:54:11.287193+00:00",
+          "completed_at": "2026-07-10T15:54:11.291057+00:00"
+        }
+      ],
+      "pages": [
+        {
+          "id": "page-1",
+          "job_id": "1077af3d15df",
+          "order_index": 0,
+          "page_number": 1,
+          "preview_label": "Page 1",
+          "thumbnail_url": "/artifacts/jobs/1077af3d15df/thumbnails/page-1-thumb.jpg",
+          "image_url": "/artifacts/jobs/1077af3d15df/pages/page-1.png",
+          "sharpness_score": 1.0735287169411147,
+          "segment_start": 1.6551111111111112,
+          "segment_end": 6.147555555555556,
+          "source_frame_index": 140,
+          "source_timestamp": 4.728888888888889,
+          "manual": false,
+          "rotation": 0,
+          "status": "active",
+          "deleted": false,
+          "source_image_url": "/artifacts/jobs/1077af3d15df/source-pages/page-1-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": null,
+          "ocr_blocks": [],
+          "ocr_status": "failed",
+          "ocr_error": "pytesseract is not installed. Run: pip install pytesseract"
+        },
+        {
+          "id": "page-2",
+          "job_id": "1077af3d15df",
+          "order_index": 1,
+          "page_number": 2,
+          "preview_label": "Page 2",
+          "thumbnail_url": "/artifacts/jobs/1077af3d15df/thumbnails/page-2-thumb.jpg",
+          "image_url": "/artifacts/jobs/1077af3d15df/pages/page-2.png",
+          "sharpness_score": 1.036241745043764,
+          "segment_start": 6.384,
+          "segment_end": 8.98488888888889,
+          "source_frame_index": 259,
+          "source_timestamp": 8.748444444444445,
+          "manual": false,
+          "rotation": 0,
+          "status": "active",
+          "deleted": false,
+          "source_image_url": "/artifacts/jobs/1077af3d15df/source-pages/page-2-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": null,
+          "ocr_blocks": [],
+          "ocr_status": "failed",
+          "ocr_error": "pytesseract is not installed. Run: pip install pytesseract"
+        },
+        {
+          "id": "page-3",
+          "job_id": "1077af3d15df",
+          "order_index": 2,
+          "page_number": 3,
+          "preview_label": "Page 3",
+          "thumbnail_url": "/artifacts/jobs/1077af3d15df/thumbnails/page-3-thumb.jpg",
+          "image_url": "/artifacts/jobs/1077af3d15df/pages/page-3.png",
+          "sharpness_score": 1.0908955397646127,
+          "segment_start": 9.221333333333334,
+          "segment_end": 11.822222222222223,
+          "source_frame_index": 322,
+          "source_timestamp": 10.876444444444445,
+          "manual": false,
+          "rotation": 0,
+          "status": "active",
+          "deleted": false,
+          "source_image_url": "/artifacts/jobs/1077af3d15df/source-pages/page-3-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": null,
+          "ocr_blocks": [],
+          "ocr_status": "failed",
+          "ocr_error": "pytesseract is not installed. Run: pip install pytesseract"
+        },
+        {
+          "id": "page-4",
+          "job_id": "1077af3d15df",
+          "order_index": 3,
+          "page_number": 4,
+          "preview_label": "Page 4",
+          "thumbnail_url": "/artifacts/jobs/1077af3d15df/thumbnails/page-4-thumb.jpg",
+          "image_url": "/artifacts/jobs/1077af3d15df/pages/page-4.png",
+          "sharpness_score": 0.8973998671774592,
+          "segment_start": 18.679111111111112,
+          "segment_end": 20.807111111111112,
+          "source_frame_index": 581,
+          "source_timestamp": 19.62488888888889,
+          "manual": false,
+          "rotation": 0,
+          "status": "active",
+          "deleted": false,
+          "source_image_url": "/artifacts/jobs/1077af3d15df/source-pages/page-4-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": null,
+          "ocr_blocks": [],
+          "ocr_status": "failed",
+          "ocr_error": "pytesseract is not installed. Run: pip install pytesseract"
+        },
+        {
+          "id": "page-5",
+          "job_id": "1077af3d15df",
+          "order_index": 4,
+          "page_number": 5,
+          "preview_label": "Page 5",
+          "thumbnail_url": "/artifacts/jobs/1077af3d15df/thumbnails/page-5-thumb.jpg",
+          "image_url": "/artifacts/jobs/1077af3d15df/pages/page-5.png",
+          "sharpness_score": 0.9659362804182211,
+          "segment_start": 21.043555555555557,
+          "segment_end": 22.935111111111112,
+          "source_frame_index": 651,
+          "source_timestamp": 21.989333333333335,
+          "manual": false,
+          "rotation": 0,
+          "status": "active",
+          "deleted": false,
+          "source_image_url": "/artifacts/jobs/1077af3d15df/source-pages/page-5-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": null,
+          "ocr_blocks": [],
+          "ocr_status": "failed",
+          "ocr_error": "pytesseract is not installed. Run: pip install pytesseract"
+        }
+      ],
+      "export": {
+        "status": "idle",
+        "progress_percent": 0,
+        "filename": null,
+        "download_url": null,
+        "requested_at": null,
+        "completed_at": null,
+        "error": null
+      },
+      "text_export": {
+        "status": "failed",
+        "progress_percent": 100,
+        "filename": null,
+        "download_url": null,
+        "requested_at": "2026-07-10T15:55:08.011245+00:00",
+        "completed_at": null,
+        "error": "Tectonic compiler `tectonic` was not found on PATH. Install Tectonic (https://tectonic-typesetting.github.io/) and ensure it is available, or set settings.tectonic_cmd."
+      },
+      "upload_path": "backend\\data\\uploads\\1077af3d15df-WhatsApp Video 2026-03-26 at 2.48.42 AM.mp4"
     }
   ]
 }
