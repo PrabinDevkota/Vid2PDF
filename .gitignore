@@ -9,7 +9,8 @@ __pycache__/
 .mypy_cache/
 .DS_Store
 backend/data/
+backend/backend/data/
+**/jobs_state.json
 frontend/.env
 backend/.env
 *.mp4
-backend/backend/data
