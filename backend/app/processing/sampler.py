@@ -58,22 +58,34 @@ def sample_frames(
             if context.processing_mode == "camera":
                 detection = detect_document_region(frame)
                 processed_frame = detection.corrected_image
-                transition_penalty = (
-                    (0.35 if not detection.found else 0.0)
-                    + max(0.0, 0.42 - detection.page_coverage)
-                    + max(0.0, 0.58 - detection.single_page_score)
-                    + max(0.0, detection.background_intrusion_ratio - 0.08) * 1.2
-                    + max(0.0, detection.border_touch_ratio - 0.05) * 0.8
-                    + (detection.occlusion_ratio * 1.1)
-                )
-                if previous_detection is not None:
-                    transition_penalty += _camera_stability_penalty(previous_detection, detection)
+                if not detection.found:
+                    # Phone/WhatsApp screen recordings often have no paper contour.
+                    # Keep a mild penalty instead of stacking uncapped detection failures.
+                    transition_penalty = 0.2
+                else:
+                    transition_penalty = (
+                        max(0.0, 0.42 - detection.page_coverage)
+                        + max(0.0, 0.58 - detection.single_page_score)
+                        + max(0.0, detection.background_intrusion_ratio - 0.08) * 1.2
+                        + max(0.0, detection.border_touch_ratio - 0.05) * 0.8
+                        + (detection.occlusion_ratio * 1.1)
+                    )
+                    if previous_detection is not None:
+                        transition_penalty += _camera_stability_penalty(
+                            previous_detection,
+                            detection,
+                        )
+                transition_penalty = min(transition_penalty, 1.0)
             else:
                 detection = None
                 processed_frame = frame
                 transition_penalty = 0.0
             if previous_processed_frame is not None:
-                transition_penalty += _frame_transition_penalty(previous_processed_frame, processed_frame)
+                transition_penalty += _frame_transition_penalty(
+                    previous_processed_frame,
+                    processed_frame,
+                )
+                transition_penalty = min(transition_penalty, 1.0)
 
             quality = compute_frame_quality(
                 processed_frame,

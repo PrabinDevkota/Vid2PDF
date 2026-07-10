@@ -16,9 +16,9 @@ class Settings(BaseModel):
     camera_stable_segment_hash_distance_threshold: int = 4
     camera_stable_segment_mean_diff_threshold: float = 0.02
     camera_dedupe_max_hash_distance: int = 3
-    quality_min_sharpness_score: float = 0.24
-    quality_min_readability_score: float = 0.34
-    quality_max_transition_penalty: float = 0.42
+    quality_min_sharpness_score: float = 0.14
+    quality_min_readability_score: float = 0.28
+    quality_max_transition_penalty: float = 0.55
     quality_max_occlusion_ratio: float = 0.08
     quality_min_page_coverage: float = 0.42
     quality_min_rectangularity: float = 0.62
@@ -28,7 +28,7 @@ class Settings(BaseModel):
     quality_min_contour_confidence: float = 0.62
     quality_max_gutter_ratio: float = 0.11
     quality_max_opposing_page_ratio: float = 0.2
-    quality_min_text_density: float = 0.012
+    quality_min_text_density: float = 0.006
     quality_sequence_duplicate_seconds: float = 2.4
     quality_duplicate_content_diff_threshold: float = 0.075
     quality_duplicate_histogram_threshold: float = 0.9
@@ -50,7 +50,12 @@ class Settings(BaseModel):
     tesseract_cmd: str | None = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
     tectonic_cmd: str = r"C:\Users\prabi\AppData\Local\Programs\tectonic\tectonic.exe"
     ocr_language: str = "eng"
-    ocr_min_confidence: float = 40.0
+    ocr_min_confidence: float = 20.0
+    ocr_psm: int = 6
+    ocr_psm_fallback: int = 4
+    ocr_oem: int = 3
+    ocr_upscale_min_width: int = 1600
+    ocr_preprocess_enabled: bool = True
     ocr_consecutive_duplicate_similarity: float = 0.92
 
 

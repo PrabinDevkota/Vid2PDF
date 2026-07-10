@@ -36,9 +36,11 @@ from app.processing.pipeline import (
     PIPELINE_STAGES,
     build_export,
     build_text_export,
+    camera_detection_failed,
     collect_ocr_duplicate_notes,
     ocr_selected_pages,
 )
+from app.processing.page_fallback import FALLBACK_NOTE, ensure_pages_from_frames
 from app.processing.preview import attach_previews
 from app.processing.scoring import compute_frame_quality
 from app.processing.sampler import load_video_metadata, sample_frames
@@ -361,6 +363,7 @@ class JobService:
                 processing_mode=processing_mode,
             )
             mode_settings = self._pipeline_settings(processing_mode)
+            pipeline_notes: list[str] = []
 
             self._start_stage(job_id, "sample_frames", "Sampling frames from the uploaded video.", 8)
             metadata = load_video_metadata(upload_path)
@@ -369,7 +372,33 @@ class JobService:
                 metadata=metadata,
                 sample_fps=mode_settings["sample_fps"],
             )
-            self._complete_stage(job_id, "sample_frames", 24, f"Sampled {len(sampled_frames)} frames.")
+
+            if processing_mode == "camera" and camera_detection_failed(sampled_frames):
+                pipeline_notes.append(
+                    "Camera mode found no page contours; automatically switched to screen mode."
+                )
+                processing_mode = "screen"
+                context = build_pipeline_context(
+                    job_id=job_id,
+                    upload_path=upload_path,
+                    processing_mode="screen",
+                )
+                mode_settings = self._pipeline_settings("screen")
+                sampled_frames = sample_frames(
+                    context=context,
+                    metadata=metadata,
+                    sample_fps=mode_settings["sample_fps"],
+                )
+                with self._lock:
+                    job = self._jobs[job_id]
+                    job.processing_mode = "screen"
+
+            self._complete_stage(
+                job_id,
+                "sample_frames",
+                24,
+                f"Sampled {len(sampled_frames)} frames.",
+            )
 
             self._start_stage(job_id, "detect_segments", "Detecting stable page-view segments.", 28)
             segments = detect_stable_segments(
@@ -396,8 +425,15 @@ class JobService:
                 sequence_pages,
                 max_hamming_distance=mode_settings["dedupe_threshold"],
             )
-            if not unique_pages and sequence_pages:
-                unique_pages = [sequence_pages[0]]
+            unique_pages, used_fallback = ensure_pages_from_frames(
+                unique_pages=unique_pages,
+                sequence_pages=sequence_pages,
+                selected_pages=selected_pages,
+                sampled_frames=sampled_frames,
+                processing_mode=processing_mode,
+            )
+            if used_fallback:
+                pipeline_notes.append(FALLBACK_NOTE)
             self._complete_stage(
                 job_id,
                 "remove_duplicates",
@@ -436,9 +472,10 @@ class JobService:
                 job.notes = [
                     f"Pipeline completed in {processing_mode} mode with background execution.",
                     "Pages can now be reviewed, reordered, rotated, deleted, and exported through backend-backed state.",
+                    *pipeline_notes,
                     f"Processed video at {metadata.fps:.2f} fps, {metadata.width}x{metadata.height}, duration {metadata.duration_seconds:.1f}s.",
                     f"Sampled {len(sampled_frames)} frames and detected {len(segments)} stable page segments.",
-                    f"Selected {len(selected_pages)} representative frames, collapsed to {len(sequence_pages)} sequence-stable candidates, removed {len(sequence_pages) - len(preview_pages)} duplicates, and kept {len(preview_pages)} pages after deduplication.",
+                    f"Selected {len(selected_pages)} representative frames, collapsed to {len(sequence_pages)} sequence-stable candidates, removed {max(len(sequence_pages) - len(preview_pages), 0)} duplicates, and kept {len(preview_pages)} pages after deduplication.",
                     f"Extracted text from {len(ocr_results)} unique pages ({ready_count} with text).",
                 ]
                 job.notes.extend(ocr_notes)
@@ -611,7 +648,8 @@ class JobService:
             self._save_jobs()
 
     def _ensure_page_ocr(self, page: Page, *, page_number: int) -> PageText:
-        if page.ocr_status in {"ready", "empty"} and page.ocr_text is not None:
+        # Only reuse successful OCR. Re-run empty/failed so improved settings apply.
+        if page.ocr_status == "ready" and page.ocr_text:
             return PageText(
                 page_id=page.id,
                 page_number=page_number,

@@ -8,6 +8,37 @@ from app.processing.ocr import (
     normalize_ocr_text,
     text_similarity,
 )
+from app.processing.page_fallback import FALLBACK_NOTE, ensure_pages_from_frames
+from app.processing.types import FrameQuality, SampledFrame, SelectedPage
+
+
+def _make_quality(*, score: float = 0.5, rejected: bool = False) -> FrameQuality:
+    return FrameQuality(
+        sharpness=score,
+        brightness=0.5,
+        contrast=0.5,
+        edge_density=0.1,
+        page_coverage=1.0,
+        rectangularity=1.0,
+        occlusion_ratio=0.0,
+        transition_penalty=0.0,
+        readability_score=score,
+        sharpness_score=score,
+        contrast_score=0.5,
+        brightness_score=0.5,
+        text_density=0.02,
+        single_page_score=1.0,
+        background_intrusion_ratio=0.0,
+        border_touch_ratio=0.0,
+        contour_confidence=1.0,
+        gutter_ratio=0.0,
+        opposing_page_ratio=0.0,
+        stability_score=1.0,
+        rejected=rejected,
+        rejection_reasons=["severe_defocus"] if rejected else [],
+        score=score,
+        perceptual_hash="0",
+    )
 
 
 def test_escape_latex_special_characters() -> None:
@@ -84,6 +115,9 @@ def test_build_latex_document_preserves_page_count_and_empty_placeholder() -> No
     assert "Hello from page one" in latex
     assert EMPTY_PAGE_PLACEHOLDER in latex
     assert "Demo Doc" in latex
+    assert r"\definecolor{VidAccent}{HTML}{0F766E}" in latex
+    assert r"\usepackage[dvipsnames,svgnames,table]{xcolor}" in latex
+    assert r"\usepackage{titlesec}" in latex
 
 
 def test_build_latex_document_escapes_body_text() -> None:
@@ -100,3 +134,41 @@ def test_build_latex_document_escapes_body_text() -> None:
     assert r"\$10" in latex
     assert r"\&" in latex
     assert r"\%" in latex
+
+
+def test_build_latex_document_colors_headings() -> None:
+    pages = [
+        PageText(
+            page_id="page-1",
+            page_number=1,
+            blocks=[
+                TextBlock(text="CHAPTER OVERVIEW", confidence=90, top=0, left=0),
+                TextBlock(text="This is the body paragraph with details.", confidence=88, top=40, left=0),
+            ],
+            raw_text="CHAPTER OVERVIEW\n\nThis is the body paragraph with details.",
+            status="ready",
+        )
+    ]
+    latex = build_latex_document(title="Styled", pages=pages)
+    assert r"\subsection*" in latex
+    assert "VidAccent" in latex
+
+
+def test_ensure_pages_from_frames_fallback_when_empty() -> None:
+    frame = SampledFrame(
+        timestamp=1.2,
+        frame_index=12,
+        image=None,
+        quality=_make_quality(score=0.33, rejected=True),
+    )
+    pages, used_fallback = ensure_pages_from_frames(
+        unique_pages=[],
+        sequence_pages=[],
+        selected_pages=[],
+        sampled_frames=[frame],
+        processing_mode="screen",
+    )
+    assert used_fallback is True
+    assert len(pages) == 1
+    assert pages[0].page_number == 1
+    assert FALLBACK_NOTE

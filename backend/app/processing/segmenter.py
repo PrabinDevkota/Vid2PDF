@@ -151,7 +151,13 @@ def _build_segment(
     if accepted_frames:
         candidate_frames = accepted_frames
     elif all(frame.quality.rejected for frame in frames):
-        return None
+        # Never drop the segment entirely — keep the best-scoring rejected frames
+        # so phone/WhatsApp videos still produce reviewable pages.
+        ranked = sorted(frames, key=lambda frame: frame.quality.score, reverse=True)
+        candidate_frames = ranked[: max(1, min(3, len(ranked)))]
+    elif not accepted_frames:
+        ranked = sorted(candidate_frames, key=lambda frame: frame.quality.score, reverse=True)
+        candidate_frames = ranked[:1] if ranked else frames
 
     mean_change_ratio = float(np.mean([frame.change_ratio for frame in frames])) if frames else 0.0
     return StableSegment(

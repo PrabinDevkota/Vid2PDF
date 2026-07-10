@@ -7,6 +7,7 @@ from app.processing.deduper import remove_duplicates
 from app.processing.debug import write_pipeline_debug_report
 from app.processing.exporter import ExportArtifact, export_pdf
 from app.processing.ocr import PageText, extract_page_text, find_consecutive_near_duplicates
+from app.processing.page_fallback import FALLBACK_NOTE, ensure_pages_from_frames
 from app.processing.preview import attach_previews
 from app.processing.sampler import load_video_metadata, sample_frames
 from app.processing.sequence import collapse_sequence_candidates
@@ -35,6 +36,34 @@ class PipelineResult:
     context: PipelineContext
 
 
+def _mode_settings(processing_mode: str) -> dict[str, float | int]:
+    if processing_mode == "camera":
+        return {
+            "sample_fps": settings.camera_sample_fps,
+            "min_seconds": settings.camera_stable_segment_min_seconds,
+            "max_change_ratio": settings.camera_stable_segment_max_change_ratio,
+            "hash_distance_threshold": settings.camera_stable_segment_hash_distance_threshold,
+            "mean_diff_threshold": settings.camera_stable_segment_mean_diff_threshold,
+            "dedupe_threshold": settings.camera_dedupe_max_hash_distance,
+        }
+    return {
+        "sample_fps": settings.screen_sample_fps,
+        "min_seconds": settings.screen_stable_segment_min_seconds,
+        "max_change_ratio": settings.screen_stable_segment_max_change_ratio,
+        "hash_distance_threshold": settings.screen_stable_segment_hash_distance_threshold,
+        "mean_diff_threshold": settings.screen_stable_segment_mean_diff_threshold,
+        "dedupe_threshold": settings.screen_dedupe_max_hash_distance,
+    }
+
+
+def camera_detection_failed(sampled_frames: list) -> bool:
+    if not sampled_frames:
+        return True
+    return not any(
+        frame.detection is not None and frame.detection.found for frame in sampled_frames
+    )
+
+
 def run_reconstruction_pipeline(
     job_id: str,
     upload_path: str,
@@ -45,33 +74,38 @@ def run_reconstruction_pipeline(
         upload_path=upload_path,
         processing_mode=processing_mode,
     )
-    if context.processing_mode == "camera":
-        sample_fps = settings.camera_sample_fps
-        min_seconds = settings.camera_stable_segment_min_seconds
-        max_change_ratio = settings.camera_stable_segment_max_change_ratio
-        hash_distance_threshold = settings.camera_stable_segment_hash_distance_threshold
-        mean_diff_threshold = settings.camera_stable_segment_mean_diff_threshold
-        dedupe_threshold = settings.camera_dedupe_max_hash_distance
-    else:
-        sample_fps = settings.screen_sample_fps
-        min_seconds = settings.screen_stable_segment_min_seconds
-        max_change_ratio = settings.screen_stable_segment_max_change_ratio
-        hash_distance_threshold = settings.screen_stable_segment_hash_distance_threshold
-        mean_diff_threshold = settings.screen_stable_segment_mean_diff_threshold
-        dedupe_threshold = settings.screen_dedupe_max_hash_distance
+    mode = _mode_settings(context.processing_mode)
+    notes: list[str] = []
 
     metadata = load_video_metadata(upload_path)
     sampled_frames = sample_frames(
         context=context,
         metadata=metadata,
-        sample_fps=sample_fps,
+        sample_fps=float(mode["sample_fps"]),
     )
+
+    if context.processing_mode == "camera" and camera_detection_failed(sampled_frames):
+        notes.append(
+            "Camera mode found no page contours; automatically switched to screen mode."
+        )
+        context = build_pipeline_context(
+            job_id=job_id,
+            upload_path=upload_path,
+            processing_mode="screen",
+        )
+        mode = _mode_settings("screen")
+        sampled_frames = sample_frames(
+            context=context,
+            metadata=metadata,
+            sample_fps=float(mode["sample_fps"]),
+        )
+
     segments = detect_stable_segments(
         frames=sampled_frames,
-        min_seconds=min_seconds,
-        max_change_ratio=max_change_ratio,
-        hash_distance_threshold=hash_distance_threshold,
-        mean_diff_threshold=mean_diff_threshold,
+        min_seconds=float(mode["min_seconds"]),
+        max_change_ratio=float(mode["max_change_ratio"]),
+        hash_distance_threshold=int(mode["hash_distance_threshold"]),
+        mean_diff_threshold=float(mode["mean_diff_threshold"]),
     )
     selected_pages = select_best_frames(
         segments,
@@ -80,10 +114,18 @@ def run_reconstruction_pipeline(
     sequence_pages = collapse_sequence_candidates(selected_pages)
     unique_pages = remove_duplicates(
         sequence_pages,
-        max_hamming_distance=dedupe_threshold,
+        max_hamming_distance=int(mode["dedupe_threshold"]),
     )
-    if not unique_pages and sequence_pages:
-        unique_pages = [sequence_pages[0]]
+    unique_pages, used_fallback = ensure_pages_from_frames(
+        unique_pages=unique_pages,
+        sequence_pages=sequence_pages,
+        selected_pages=selected_pages,
+        sampled_frames=sampled_frames,
+        processing_mode=context.processing_mode,
+    )
+    if used_fallback:
+        notes.append(FALLBACK_NOTE)
+
     preview_pages = attach_previews(unique_pages, context=context)
     write_pipeline_debug_report(
         context=context,
@@ -104,12 +146,14 @@ def run_reconstruction_pipeline(
         len(preview_pages),
     )
 
-    notes = [
-        f"Processing mode: {context.processing_mode}.",
-        f"Processed video at {metadata.fps:.2f} fps, {metadata.width}x{metadata.height}, duration {metadata.duration_seconds:.1f}s.",
-        f"Sampled {len(sampled_frames)} frames and detected {len(segments)} stable page segments.",
-        f"Selected {len(selected_pages)} representative frames, collapsed to {len(sequence_pages)} sequence-stable candidates, removed {len(sequence_pages) - len(preview_pages)} duplicates, and kept {len(preview_pages)} pages after deduplication.",
-    ]
+    notes.extend(
+        [
+            f"Processing mode: {context.processing_mode}.",
+            f"Processed video at {metadata.fps:.2f} fps, {metadata.width}x{metadata.height}, duration {metadata.duration_seconds:.1f}s.",
+            f"Sampled {len(sampled_frames)} frames and detected {len(segments)} stable page segments.",
+            f"Selected {len(selected_pages)} representative frames, collapsed to {len(sequence_pages)} sequence-stable candidates, removed {max(len(sequence_pages) - len(preview_pages), 0)} duplicates, and kept {len(preview_pages)} pages after deduplication.",
+        ]
+    )
 
     return PipelineResult(
         notes=notes,
