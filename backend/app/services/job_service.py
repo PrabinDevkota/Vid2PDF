@@ -38,6 +38,7 @@ from app.processing.pipeline import (
     build_text_export,
     camera_detection_failed,
     collect_ocr_duplicate_notes,
+    ocr_and_collapse_duplicates,
     ocr_selected_pages,
 )
 from app.processing.page_fallback import FALLBACK_NOTE, ensure_pages_from_frames
@@ -454,8 +455,7 @@ class JobService:
             )
 
             self._start_stage(job_id, "extract_text", "Extracting text from unique page frames.", 92)
-            ocr_results = ocr_selected_pages(preview_pages)
-            ocr_notes = collect_ocr_duplicate_notes(ocr_results)
+            preview_pages, ocr_results, ocr_notes = ocr_and_collapse_duplicates(preview_pages)
             ready_count = sum(1 for item in ocr_results if item.status == "ready")
             empty_count = sum(1 for item in ocr_results if item.status == "empty")
             failed_count = sum(1 for item in ocr_results if item.status == "failed")

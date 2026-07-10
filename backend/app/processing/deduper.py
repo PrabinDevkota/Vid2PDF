@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import re
-import shutil
 from difflib import SequenceMatcher
 
 import cv2
@@ -44,6 +43,8 @@ def remove_duplicates(
         if _page_quality_rank(page) > _page_quality_rank(unique_pages[duplicate_index]):
             unique_pages[duplicate_index] = page
 
+    unique_pages = _drop_very_weak_pages(unique_pages)
+
     for index, page in enumerate(unique_pages, start=1):
         page.page_number = index
         page.label = f"Page {index}"
@@ -59,69 +60,121 @@ def remove_duplicates(
     return unique_pages
 
 
+def _drop_very_weak_pages(pages: list[SelectedPage]) -> list[SelectedPage]:
+    """Drop extremely blurry/low-score pages when stronger alternatives exist."""
+    if len(pages) <= 1:
+        return pages
+
+    min_score = settings.quality_min_keep_score
+    strong = [page for page in pages if page.selected_frame.quality.score >= min_score]
+    if not strong:
+        return pages
+
+    # Keep weak pages only when they are not near-duplicates of a stronger page.
+    kept: list[SelectedPage] = list(strong)
+    for page in pages:
+        if page.selected_frame.quality.score >= min_score:
+            continue
+        is_dup = any(
+            _is_duplicate_candidate(page, existing, max_hamming_distance=10)
+            for existing in kept
+        )
+        if not is_dup:
+            kept.append(page)
+
+    return sorted(kept, key=lambda item: item.segment_start)
+
+
 def _is_duplicate_candidate(left: SelectedPage, right: SelectedPage, max_hamming_distance: int) -> bool:
     evidence = _duplicate_evidence(left, right, max_hamming_distance)
 
-    if evidence["hash_distance"] > max_hamming_distance + 6 and evidence["visual_similarity"] < 0.95:
+    if (
+        evidence["hash_distance"] > max_hamming_distance + 8
+        and evidence["visual_similarity"] < 0.86
+        and evidence["content_diff"] > settings.quality_duplicate_content_match_threshold * 2.2
+    ):
         return False
 
     temporal_gap = abs(left.segment_start - right.segment_start)
-    text_heavy = evidence["text_heavy"]
+    text_heavy = bool(evidence["text_heavy"])
+    content_match = float(evidence["content_diff"]) <= settings.quality_duplicate_content_match_threshold
+    near_visual = float(evidence["visual_similarity"]) >= settings.quality_duplicate_near_visual_threshold
 
-    # Strong same-page visual match is enough only when captures are local in time,
-    # which avoids collapsing consecutive real pages with similar layouts.
+    # Near-identical frame content: collapse regardless of how long the page was held.
+    if content_match and near_visual and float(evidence["layout_similarity"]) >= 0.86:
+        return True
+
+    if (
+        float(evidence["visual_similarity"]) >= 0.94
+        and float(evidence["layout_similarity"]) >= 0.90
+        and float(evidence["profile_similarity"]) >= 0.88
+    ):
+        return True
+
+    if (
+        int(evidence["hash_distance"]) <= max_hamming_distance
+        and float(evidence["visual_similarity"]) >= 0.86
+        and float(evidence["layout_similarity"]) >= 0.88
+    ):
+        return True
+
+    # Strong same-page visual match within a local window.
     if (
         temporal_gap <= settings.quality_sequence_duplicate_seconds
-        and evidence["visual_similarity"] >= 0.98
-        and evidence["layout_similarity"] >= 0.94
-        and evidence["profile_similarity"] >= 0.92
+        and float(evidence["visual_similarity"]) >= 0.82
+        and float(evidence["layout_similarity"]) >= 0.88
+        and float(evidence["profile_similarity"]) >= 0.86
     ):
         return True
 
     if (
         temporal_gap <= settings.quality_sequence_duplicate_seconds
-        and evidence["visual_similarity"] >= 0.72
-        and evidence["layout_similarity"] >= 0.89
-        and evidence["profile_similarity"] >= 0.93
-        and evidence["text_structure_similarity"] >= 0.84
+        and float(evidence["visual_similarity"]) >= 0.72
+        and float(evidence["layout_similarity"]) >= 0.89
+        and float(evidence["profile_similarity"]) >= 0.93
+        and float(evidence["text_structure_similarity"]) >= 0.84
         and (_is_weak_duplicate_capture(left) or _is_weak_duplicate_capture(right))
     ):
         return True
 
     if text_heavy:
-        text_similarity = max(evidence["ocr_similarity"], evidence["text_structure_similarity"])
+        text_similarity = max(
+            float(evidence["ocr_similarity"]),
+            float(evidence["text_structure_similarity"]),
+        )
         if (
-            evidence["visual_similarity"] >= 0.93
-            and evidence["layout_similarity"] >= 0.9
-            and evidence["profile_similarity"] >= 0.93
+            float(evidence["visual_similarity"]) >= 0.86
+            and float(evidence["layout_similarity"]) >= 0.86
             and text_similarity >= settings.quality_duplicate_text_similarity_threshold
         ):
             return True
 
         if (
             temporal_gap <= settings.quality_sequence_duplicate_seconds
-            and evidence["visual_similarity"] >= 0.9
-            and evidence["layout_similarity"] >= 0.9
-            and evidence["profile_similarity"] >= 0.93
-            and evidence["text_structure_similarity"] >= 0.97
+            and float(evidence["visual_similarity"]) >= 0.84
+            and float(evidence["layout_similarity"]) >= 0.88
+            and float(evidence["text_structure_similarity"]) >= 0.92
         ):
             return True
 
-        return False
-
     if (
         temporal_gap <= settings.quality_sequence_duplicate_seconds
-        and evidence["visual_similarity"] >= settings.quality_duplicate_low_text_visual_threshold
-        and evidence["layout_similarity"] >= 0.92
-        and evidence["profile_similarity"] >= 0.9
+        and float(evidence["visual_similarity"]) >= settings.quality_duplicate_low_text_visual_threshold
+        and float(evidence["layout_similarity"]) >= 0.90
+        and float(evidence["profile_similarity"]) >= 0.88
     ):
         return True
 
+    # Far-in-time revisit of the same page (user lingered / flipped back).
     if (
         temporal_gap > settings.quality_sequence_duplicate_seconds
-        and evidence["visual_similarity"] >= settings.quality_duplicate_far_visual_threshold
-        and evidence["layout_similarity"] >= 0.95
-        and evidence["profile_similarity"] >= 0.94
+        and float(evidence["visual_similarity"]) >= settings.quality_duplicate_far_visual_threshold
+        and float(evidence["layout_similarity"]) >= 0.90
+        and (
+            content_match
+            or float(evidence["profile_similarity"]) >= 0.90
+            or float(evidence["text_structure_similarity"]) >= 0.88
+        )
     ):
         return True
 
@@ -147,7 +200,17 @@ def _duplicate_evidence(
         0.0,
         min(
             (histogram_similarity * 0.4)
-            + ((1.0 - min(content_diff / max(settings.quality_duplicate_content_diff_threshold * 2.0, 0.001), 1.0)) * 0.35)
+            + (
+                (
+                    1.0
+                    - min(
+                        content_diff
+                        / max(settings.quality_duplicate_content_diff_threshold * 2.0, 0.001),
+                        1.0,
+                    )
+                )
+                * 0.35
+            )
             + (layout_similarity * 0.15)
             + (profile_similarity * 0.1),
             1.0,
@@ -161,6 +224,7 @@ def _duplicate_evidence(
     ) >= settings.quality_duplicate_text_density_threshold
     return {
         "hash_distance": hash_distance,
+        "content_diff": content_diff,
         "visual_similarity": visual_similarity,
         "layout_similarity": layout_similarity,
         "profile_similarity": profile_similarity,
@@ -172,8 +236,8 @@ def _duplicate_evidence(
 
 def _hamming_distance(left_hash: str, right_hash: str) -> int:
     width = max(len(left_hash), len(right_hash))
-    left_value = int(left_hash, 16)
-    right_value = int(right_hash, 16)
+    left_value = int(left_hash, 16) if left_hash else 0
+    right_value = int(right_hash, 16) if right_hash else 0
     return (left_value ^ right_value).bit_count() + abs(len(left_hash) - len(right_hash)) * 4
 
 
@@ -283,11 +347,18 @@ def _ocr_text_similarity(left: SelectedPage, right: SelectedPage) -> float:
 
 
 def _ocr_text(page: SelectedPage) -> str:
-    if pytesseract is None or shutil.which("tesseract") is None:
+    if pytesseract is None:
         return ""
 
     image = _normalized_duplicate_render(page)
     if image is None:
+        return ""
+
+    try:
+        from app.processing.ocr import configure_tesseract
+
+        configure_tesseract()
+    except Exception:  # pragma: no cover
         return ""
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)

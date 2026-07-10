@@ -6,7 +6,12 @@ from app.processing.context import build_pipeline_context
 from app.processing.deduper import remove_duplicates
 from app.processing.debug import write_pipeline_debug_report
 from app.processing.exporter import ExportArtifact, export_pdf
-from app.processing.ocr import PageText, extract_page_text, find_consecutive_near_duplicates
+from app.processing.ocr import (
+    PageText,
+    collapse_ocr_duplicate_pages,
+    extract_page_text,
+    find_consecutive_near_duplicates,
+)
 from app.processing.page_fallback import FALLBACK_NOTE, ensure_pages_from_frames
 from app.processing.preview import attach_previews
 from app.processing.sampler import load_video_metadata, sample_frames
@@ -198,11 +203,26 @@ def ocr_selected_pages(pages: list[SelectedPage]) -> list[PageText]:
     return results
 
 
+def ocr_and_collapse_duplicates(
+    pages: list[SelectedPage],
+) -> tuple[list[SelectedPage], list[PageText], list[str]]:
+    """OCR pages, then drop near-duplicate OCR pages keeping the sharper copy."""
+    ocr_results = ocr_selected_pages(pages)
+    collapsed_pages, collapsed_ocr, removed = collapse_ocr_duplicate_pages(pages, ocr_results)
+    notes = collect_ocr_duplicate_notes(collapsed_ocr)
+    if removed:
+        notes.insert(
+            0,
+            f"Removed {removed} near-duplicate page(s) after OCR text comparison.",
+        )
+    return collapsed_pages, collapsed_ocr, notes
+
+
 def collect_ocr_duplicate_notes(pages: list[PageText]) -> list[str]:
     notes: list[str] = []
     for left_id, right_id, score in find_consecutive_near_duplicates(pages):
         notes.append(
             f"Near-duplicate OCR text between {left_id} and {right_id} "
-            f"(similarity {score:.0%}). Both pages were kept; review before export."
+            f"(similarity {score:.0%}). Review before export if both should be kept."
         )
     return notes

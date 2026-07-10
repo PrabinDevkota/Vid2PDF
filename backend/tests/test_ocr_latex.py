@@ -118,6 +118,72 @@ def test_build_latex_document_preserves_page_count_and_empty_placeholder() -> No
     assert r"\definecolor{VidAccent}{HTML}{0F766E}" in latex
     assert r"\usepackage[dvipsnames,svgnames,table]{xcolor}" in latex
     assert r"\usepackage{titlesec}" in latex
+    assert r"\justifying" in latex
+    assert r"\usepackage{ragged2e}" in latex
+    assert r"\usepackage{microtype}" in latex
+
+
+def test_gibberish_text_is_rejected() -> None:
+    from app.processing.ocr import is_plausible_page_text
+
+    assert is_plausible_page_text("Atomic Habits is a practical guide to building better habits.")
+    assert not is_plausible_page_text("oe a we ee ee ee SE SS SS ee ee a = SS a ee")
+
+
+def test_collapse_ocr_duplicate_pages_keeps_better_copy() -> None:
+    from app.processing.ocr import collapse_ocr_duplicate_pages
+    from app.processing.types import FrameQuality, SampledFrame, SelectedPage
+
+    def make_page(page_id: str, score: float) -> SelectedPage:
+        quality = FrameQuality(
+            sharpness=score,
+            brightness=0.5,
+            contrast=0.5,
+            edge_density=0.1,
+            page_coverage=1.0,
+            rectangularity=1.0,
+            occlusion_ratio=0.0,
+            transition_penalty=0.0,
+            readability_score=score,
+            sharpness_score=score,
+            contrast_score=0.5,
+            brightness_score=0.5,
+            text_density=0.02,
+            single_page_score=1.0,
+            background_intrusion_ratio=0.0,
+            border_touch_ratio=0.0,
+            contour_confidence=1.0,
+            gutter_ratio=0.0,
+            opposing_page_ratio=0.0,
+            stability_score=1.0,
+            rejected=False,
+            rejection_reasons=[],
+            score=score,
+            perceptual_hash="0",
+        )
+        frame = SampledFrame(timestamp=1.0, frame_index=1, image=None, quality=quality)
+        return SelectedPage(
+            page_id=page_id,
+            page_number=1,
+            label="Page",
+            source_segment_id=page_id,
+            segment_start=1.0,
+            segment_end=2.0,
+            selected_frame=frame,
+            image_path="",
+            thumbnail_path="",
+        )
+
+    pages = [make_page("page-a", 0.4), make_page("page-b", 0.9)]
+    ocr = [
+        PageText(page_id="page-a", page_number=1, raw_text="Atomic Habits title page content here", status="ready"),
+        PageText(page_id="page-b", page_number=2, raw_text="Atomic Habits title page content here", status="ready"),
+    ]
+    kept_pages, kept_ocr, removed = collapse_ocr_duplicate_pages(pages, ocr, threshold=0.85)
+    assert removed == 1
+    assert len(kept_pages) == 1
+    assert kept_pages[0].page_id == "page-b"
+    assert kept_ocr[0].page_id == "page-b"
 
 
 def test_build_latex_document_escapes_body_text() -> None:
