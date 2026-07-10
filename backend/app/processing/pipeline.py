@@ -9,7 +9,7 @@ from app.processing.exporter import ExportArtifact, export_pdf
 from app.processing.ocr import (
     PageText,
     collapse_ocr_duplicate_pages,
-    extract_page_text,
+    extract_pages_text_parallel,
     find_consecutive_near_duplicates,
 )
 from app.processing.page_fallback import FALLBACK_NOTE, ensure_pages_from_frames
@@ -190,17 +190,12 @@ def build_text_export(
 
 
 def ocr_selected_pages(pages: list[SelectedPage]) -> list[PageText]:
-    """OCR each unique selected page image in order."""
-    results: list[PageText] = []
-    for page in pages:
-        results.append(
-            extract_page_text(
-                page.image_path,
-                page_id=page.page_id,
-                page_number=page.page_number,
-            )
-        )
-    return results
+    """OCR each unique selected page image, in parallel across CPU cores."""
+    jobs = [
+        (page.image_path, page.page_id, page.page_number)
+        for page in pages
+    ]
+    return extract_pages_text_parallel(jobs)
 
 
 def ocr_and_collapse_duplicates(

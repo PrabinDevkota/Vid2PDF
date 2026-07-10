@@ -130,6 +130,14 @@ def test_gibberish_text_is_rejected() -> None:
     assert not is_plausible_page_text("oe a we ee ee ee SE SS SS ee ee a = SS a ee")
 
 
+def test_ocr_fast_accept_score_setting_exists() -> None:
+    from app.core.settings import settings
+
+    assert settings.ocr_fast_accept_score > 0
+    assert settings.ocr_dedupe_use_tesseract is False
+    assert settings.ocr_upscale_min_width <= 1600
+
+
 def test_collapse_ocr_duplicate_pages_keeps_better_copy() -> None:
     from app.processing.ocr import collapse_ocr_duplicate_pages
     from app.processing.types import FrameQuality, SampledFrame, SelectedPage

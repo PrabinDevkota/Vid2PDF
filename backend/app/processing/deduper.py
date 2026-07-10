@@ -339,6 +339,8 @@ def _text_structure_tokens(page: SelectedPage) -> set[str]:
 
 
 def _ocr_text_similarity(left: SelectedPage, right: SelectedPage) -> float:
+    if not settings.ocr_dedupe_use_tesseract:
+        return 0.0
     left_text = _ocr_text(left)
     right_text = _ocr_text(right)
     if not left_text or not right_text:
@@ -347,11 +349,16 @@ def _ocr_text_similarity(left: SelectedPage, right: SelectedPage) -> float:
 
 
 def _ocr_text(page: SelectedPage) -> str:
-    if pytesseract is None:
+    if not settings.ocr_dedupe_use_tesseract or pytesseract is None:
         return ""
+
+    cached = getattr(page, "_dedupe_ocr_cache", None)
+    if cached is not None:
+        return cached
 
     image = _normalized_duplicate_render(page)
     if image is None:
+        page._dedupe_ocr_cache = ""  # type: ignore[attr-defined]
         return ""
 
     try:
@@ -359,6 +366,7 @@ def _ocr_text(page: SelectedPage) -> str:
 
         configure_tesseract()
     except Exception:  # pragma: no cover
+        page._dedupe_ocr_cache = ""  # type: ignore[attr-defined]
         return ""
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -366,8 +374,10 @@ def _ocr_text(page: SelectedPage) -> str:
     try:
         text = pytesseract.image_to_string(normalized, config="--psm 6")
     except Exception:  # pragma: no cover
+        page._dedupe_ocr_cache = ""  # type: ignore[attr-defined]
         return ""
     compact = re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+    page._dedupe_ocr_cache = compact  # type: ignore[attr-defined]
     return compact
 
 

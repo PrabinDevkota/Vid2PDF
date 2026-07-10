@@ -4,17 +4,21 @@ import logging
 import os
 import re
 import shutil
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from pathlib import Path
 
 import cv2
 import numpy as np
-from PIL import Image, ImageFilter, ImageOps
+from PIL import Image, ImageOps
 
 from app.core.settings import settings
 
 logger = logging.getLogger(__name__)
+
+# Prefer many single-threaded Tesseract processes over OpenMP oversubscription.
+os.environ.setdefault("OMP_THREAD_LIMIT", "1")
 
 try:
     import pytesseract
@@ -26,6 +30,7 @@ _GIBBERISH_TOKEN = re.compile(
     r"^(?:[^\w]|ee+|ss+|se+|oe+|we+|sc+|ps+|[_=>\-]+)+$",
     re.IGNORECASE,
 )
+_TESSERACT_CONFIGURED = False
 
 
 @dataclass
@@ -85,16 +90,20 @@ def resolve_tesseract_cmd() -> str:
 
 
 def configure_tesseract() -> None:
+    global _TESSERACT_CONFIGURED
     if pytesseract is None:
         raise RuntimeError(
             "pytesseract is not installed. Run: pip install pytesseract"
         )
+    if _TESSERACT_CONFIGURED and pytesseract.pytesseract.tesseract_cmd:
+        return
     tesseract_path = resolve_tesseract_cmd()
     pytesseract.pytesseract.tesseract_cmd = tesseract_path
+    _TESSERACT_CONFIGURED = True
 
 
 def preprocess_for_ocr(image: Image.Image, *, variant: str = "clahe") -> Image.Image:
-    """OCR-friendly preprocess variants: CLAHE, adaptive binary, or Otsu."""
+    """OCR-friendly preprocess variants: CLAHE (default), adaptive binary, or Otsu."""
     if not settings.ocr_preprocess_enabled:
         return image.convert("RGB")
 
@@ -103,14 +112,16 @@ def preprocess_for_ocr(image: Image.Image, *, variant: str = "clahe") -> Image.I
     min_width = settings.ocr_upscale_min_width
     if width < min_width:
         scale = min_width / max(width, 1)
+        # BILINEAR is much faster than LANCZOS and good enough for OCR upscales.
         rgb = rgb.resize(
             (max(1, int(width * scale)), max(1, int(height * scale))),
-            Image.Resampling.LANCZOS,
+            Image.Resampling.BILINEAR,
         )
 
     gray = ImageOps.grayscale(rgb)
     array = np.array(gray)
-    array = _deskew_gray(array)
+    if settings.ocr_deskew_enabled:
+        array = _deskew_gray(array)
 
     if variant == "adaptive":
         blurred = cv2.GaussianBlur(array, (3, 3), 0)
@@ -122,21 +133,21 @@ def preprocess_for_ocr(image: Image.Image, *, variant: str = "clahe") -> Image.I
             31,
             11,
         )
-        result = Image.fromarray(binary)
-        return result.convert("RGB")
+        return Image.fromarray(binary).convert("RGB")
 
     if variant == "otsu":
         blurred = cv2.GaussianBlur(array, (3, 3), 0)
         _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        result = Image.fromarray(binary)
-        return result.convert("RGB")
+        return Image.fromarray(binary).convert("RGB")
 
-    clahe = cv2.createCLAHE(clipLimit=2.2, tileGridSize=(8, 8))
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     enhanced = clahe.apply(array)
-    denoised = cv2.fastNlMeansDenoising(enhanced, None, 7, 7, 21)
-    result = Image.fromarray(denoised)
+    if settings.ocr_denoise_enabled:
+        enhanced = cv2.fastNlMeansDenoising(enhanced, None, 7, 7, 21)
+    else:
+        enhanced = cv2.GaussianBlur(enhanced, (3, 3), 0)
+    result = Image.fromarray(enhanced)
     result = ImageOps.autocontrast(result)
-    result = result.filter(ImageFilter.MedianFilter(size=3))
     return result.convert("RGB")
 
 
@@ -196,6 +207,54 @@ def extract_page_text(
         raw_text=raw_text,
         status="ready",
     )
+
+
+def extract_pages_text_parallel(
+    jobs: list[tuple[str, str, int]],
+) -> list[PageText]:
+    """
+    OCR many pages in parallel.
+
+    Each job is (image_path, page_id, page_number). Results are returned in the
+    same order as `jobs`.
+    """
+    if not jobs:
+        return []
+    if len(jobs) == 1:
+        image_path, page_id, page_number = jobs[0]
+        return [extract_page_text(image_path, page_id=page_id, page_number=page_number)]
+
+    workers = settings.ocr_workers
+    if workers <= 0:
+        workers = min(4, max(1, (os.cpu_count() or 2)))
+    workers = min(workers, len(jobs))
+
+    results: list[PageText | None] = [None] * len(jobs)
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="vid2pdf-ocr") as pool:
+        futures = {
+            pool.submit(
+                extract_page_text,
+                image_path,
+                page_id=page_id,
+                page_number=page_number,
+            ): index
+            for index, (image_path, page_id, page_number) in enumerate(jobs)
+        }
+        for future in as_completed(futures):
+            index = futures[future]
+            results[index] = future.result()
+
+    return [
+        item
+        if item is not None
+        else PageText(
+            page_id="unknown",
+            page_number=index + 1,
+            status="failed",
+            error="OCR worker returned no result",
+        )
+        for index, item in enumerate(results)
+    ]
 
 
 def normalize_ocr_text(text: str) -> str:
@@ -336,34 +395,55 @@ def _ocr_page_rank(ocr: PageText, page) -> float:
 
 
 def _best_ocr_result(original: Image.Image) -> dict:
-    """Try preprocess variants × PSM modes and keep the most plausible result."""
-    variants = ("clahe", "adaptive", "otsu")
-    psms = list(settings.ocr_psm_candidates) or [settings.ocr_psm, settings.ocr_psm_fallback]
+    """
+    Fast cascade: one good pass usually wins; only escalate when quality is poor.
+
+    Typical path: 1 Tesseract call. Worst path: a few targeted fallbacks
+    (not a full 3×3 grid of preprocess × PSM).
+    """
+    primary_psms = list(settings.ocr_psm_candidates) or [settings.ocr_psm]
+    fallback_psms = list(settings.ocr_psm_fallback_candidates) or [settings.ocr_psm_fallback]
+    accept_score = settings.ocr_fast_accept_score
+
     best: dict | None = None
     best_score = -1.0
 
-    for variant in variants:
-        processed = preprocess_for_ocr(original, variant=variant)
-        for psm in psms:
-            candidate = _ocr_pass(processed, psm=psm)
+    # Pass 1: fast CLAHE + primary PSM(s)
+    clahe = preprocess_for_ocr(original, variant="clahe")
+    for psm in primary_psms:
+        candidate = _ocr_pass(clahe, psm=psm)
+        score = _score_ocr_candidate(candidate)
+        if score > best_score:
+            best_score = score
+            best = candidate
+        if best_score >= accept_score:
+            return best
+
+    # Pass 2: alternate PSM on the same preprocess (cheap — image already ready)
+    for psm in fallback_psms:
+        if psm in primary_psms:
+            continue
+        candidate = _ocr_pass(clahe, psm=psm)
+        score = _score_ocr_candidate(candidate)
+        if score > best_score:
+            best_score = score
+            best = candidate
+        if best_score >= accept_score:
+            return best
+
+    # Pass 3: only if still weak — try binary variants with primary PSM
+    if best_score < accept_score:
+        for variant in ("adaptive", "otsu"):
+            processed = preprocess_for_ocr(original, variant=variant)
+            candidate = _ocr_pass(processed, psm=primary_psms[0])
             score = _score_ocr_candidate(candidate)
             if score > best_score:
                 best_score = score
                 best = candidate
+            if best_score >= accept_score:
+                break
 
     assert best is not None
-    # Prefer longer plain string dump when structured OCR lost too much text.
-    string_text = normalize_ocr_text(best["string_text"])
-    if len(string_text.strip()) > len(best["raw_text"].strip()) * 1.2 and is_plausible_page_text(string_text):
-        best = {
-            "blocks": [
-                TextBlock(text=part, confidence=70.0, top=index * 30, left=0)
-                for index, part in enumerate(string_text.split("\n\n"))
-                if part.strip()
-            ],
-            "raw_text": string_text,
-            "string_text": best["string_text"],
-        }
     return best
 
 
@@ -381,6 +461,7 @@ def _score_ocr_candidate(candidate: dict) -> float:
 
 
 def _ocr_pass(image: Image.Image, *, psm: int) -> dict:
+    """Single Tesseract invocation via image_to_data (no duplicate image_to_string)."""
     config = f"--oem {settings.ocr_oem} --psm {psm}"
     data = pytesseract.image_to_data(
         image,
@@ -390,15 +471,10 @@ def _ocr_pass(image: Image.Image, *, psm: int) -> dict:
     )
     blocks = _blocks_from_tesseract_data(data)
     raw_text = _join_blocks(blocks)
-    string_text = pytesseract.image_to_string(
-        image,
-        lang=settings.ocr_language,
-        config=config,
-    )
     return {
         "blocks": blocks,
         "raw_text": raw_text,
-        "string_text": string_text,
+        "string_text": raw_text,
     }
 
 
@@ -523,7 +599,17 @@ def _is_plausible_token(token: str) -> bool:
 def _deskew_gray(gray: np.ndarray) -> np.ndarray:
     """Light deskew using text-pixel minAreaRect; no-op on failure."""
     try:
-        binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+        # Downsample for angle estimation — much faster on large pages.
+        height, width = gray.shape[:2]
+        work = gray
+        if max(height, width) > 900:
+            scale = 900 / max(height, width)
+            work = cv2.resize(
+                gray,
+                (max(1, int(width * scale)), max(1, int(height * scale))),
+                interpolation=cv2.INTER_AREA,
+            )
+        binary = cv2.threshold(work, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
         coords = np.column_stack(np.where(binary > 0))
         if coords.shape[0] < 200:
             return gray
@@ -532,15 +618,14 @@ def _deskew_gray(gray: np.ndarray) -> np.ndarray:
             angle = -(90 + angle)
         else:
             angle = -angle
-        if abs(angle) < 0.4 or abs(angle) > 12:
+        if abs(angle) < 0.5 or abs(angle) > 12:
             return gray
-        height, width = gray.shape[:2]
         matrix = cv2.getRotationMatrix2D((width / 2, height / 2), angle, 1.0)
         return cv2.warpAffine(
             gray,
             matrix,
             (width, height),
-            flags=cv2.INTER_CUBIC,
+            flags=cv2.INTER_LINEAR,
             borderMode=cv2.BORDER_REPLICATE,
         )
     except Exception:  # pragma: no cover
