@@ -494,8 +494,11 @@ def _join_blocks(blocks: list[TextBlock]) -> str:
 
 def _is_plausible_token(token: str) -> bool:
     cleaned = re.sub(r"^[^\w]+|[^\w]+$", "", token)
+    # Keep standalone currency/math punctuation that appears in real prose.
+    if token in {"&", "%", "$", "#", "+", "=", "/", ":", ";"}:
+        return True
     if not cleaned:
-        return False
+        return bool(re.fullmatch(r"[\w&%$#+\-/=:;.]+", token))
     if len(cleaned) == 1 and cleaned.isalpha():
         return cleaned.lower() in set("aio")
     if _GIBBERISH_TOKEN.match(cleaned):
@@ -503,7 +506,7 @@ def _is_plausible_token(token: str) -> bool:
     letters = [char for char in cleaned if char.isalpha()]
     if not letters:
         # Keep short numbers / punctuation-light tokens.
-        return cleaned.isdigit() and len(cleaned) <= 4
+        return bool(re.fullmatch(r"[\d$%.,:+\-/]+", cleaned)) and len(cleaned) <= 12
     if len(letters) >= 4:
         unique_ratio = len(set(char.lower() for char in letters)) / len(letters)
         if unique_ratio < 0.28:

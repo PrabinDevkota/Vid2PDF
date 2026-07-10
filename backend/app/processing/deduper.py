@@ -89,92 +89,92 @@ def _is_duplicate_candidate(left: SelectedPage, right: SelectedPage, max_hamming
     evidence = _duplicate_evidence(left, right, max_hamming_distance)
 
     if (
-        evidence["hash_distance"] > max_hamming_distance + 8
-        and evidence["visual_similarity"] < 0.86
-        and evidence["content_diff"] > settings.quality_duplicate_content_match_threshold * 2.2
+        evidence["hash_distance"] > max_hamming_distance + 6
+        and evidence["visual_similarity"] < 0.95
     ):
         return False
 
     temporal_gap = abs(left.segment_start - right.segment_start)
     text_heavy = bool(evidence["text_heavy"])
-    content_match = float(evidence["content_diff"]) <= settings.quality_duplicate_content_match_threshold
-    near_visual = float(evidence["visual_similarity"]) >= settings.quality_duplicate_near_visual_threshold
+    visual = float(evidence["visual_similarity"])
+    layout = float(evidence["layout_similarity"])
+    profile = float(evidence["profile_similarity"])
+    text_structure = float(evidence["text_structure_similarity"])
+    ocr_sim = float(evidence["ocr_similarity"])
+    content_diff = float(evidence["content_diff"])
 
-    # Near-identical frame content: collapse regardless of how long the page was held.
-    if content_match and near_visual and float(evidence["layout_similarity"]) >= 0.86:
+    # Near-identical captures: very high visual agreement, independent of time.
+    if visual >= 0.98 and layout >= 0.95 and profile >= 0.93:
         return True
 
     if (
-        float(evidence["visual_similarity"]) >= 0.94
-        and float(evidence["layout_similarity"]) >= 0.90
-        and float(evidence["profile_similarity"]) >= 0.88
+        content_diff <= settings.quality_duplicate_content_match_threshold
+        and visual >= 0.98
+        and layout >= 0.95
     ):
         return True
 
-    if (
-        int(evidence["hash_distance"]) <= max_hamming_distance
-        and float(evidence["visual_similarity"]) >= 0.86
-        and float(evidence["layout_similarity"]) >= 0.88
-    ):
-        return True
-
-    # Strong same-page visual match within a local window.
+    # Strong same-page visual match when captures are local in time.
     if (
         temporal_gap <= settings.quality_sequence_duplicate_seconds
-        and float(evidence["visual_similarity"]) >= 0.82
-        and float(evidence["layout_similarity"]) >= 0.88
-        and float(evidence["profile_similarity"]) >= 0.86
+        and visual >= 0.985
+        and layout >= 0.94
+        and profile >= 0.92
     ):
         return True
 
     if (
         temporal_gap <= settings.quality_sequence_duplicate_seconds
-        and float(evidence["visual_similarity"]) >= 0.72
-        and float(evidence["layout_similarity"]) >= 0.89
-        and float(evidence["profile_similarity"]) >= 0.93
-        and float(evidence["text_structure_similarity"]) >= 0.84
+        and visual >= 0.66
+        and layout >= 0.89
+        and profile >= 0.93
+        and text_structure >= 0.84
         and (_is_weak_duplicate_capture(left) or _is_weak_duplicate_capture(right))
     ):
         return True
 
     if text_heavy:
-        text_similarity = max(
-            float(evidence["ocr_similarity"]),
-            float(evidence["text_structure_similarity"]),
-        )
+        text_similarity = max(ocr_sim, text_structure)
         if (
-            float(evidence["visual_similarity"]) >= 0.86
-            and float(evidence["layout_similarity"]) >= 0.86
+            visual >= 0.93
+            and layout >= 0.90
+            and profile >= 0.92
             and text_similarity >= settings.quality_duplicate_text_similarity_threshold
         ):
             return True
 
         if (
             temporal_gap <= settings.quality_sequence_duplicate_seconds
-            and float(evidence["visual_similarity"]) >= 0.84
-            and float(evidence["layout_similarity"]) >= 0.88
-            and float(evidence["text_structure_similarity"]) >= 0.92
+            and visual >= 0.88
+            and layout >= 0.90
+            and profile >= 0.92
+            and text_structure >= 0.95
+        ):
+            return True
+
+        # OCR-confirmed duplicate even across longer gaps (same page revisited).
+        if (
+            ocr_sim >= settings.quality_duplicate_text_similarity_threshold
+            and visual >= 0.86
+            and layout >= 0.88
         ):
             return True
 
     if (
-        temporal_gap <= settings.quality_sequence_duplicate_seconds
-        and float(evidence["visual_similarity"]) >= settings.quality_duplicate_low_text_visual_threshold
-        and float(evidence["layout_similarity"]) >= 0.90
-        and float(evidence["profile_similarity"]) >= 0.88
+        not text_heavy
+        and temporal_gap <= settings.quality_sequence_duplicate_seconds
+        and visual >= settings.quality_duplicate_low_text_visual_threshold
+        and layout >= 0.92
+        and profile >= 0.90
     ):
         return True
 
-    # Far-in-time revisit of the same page (user lingered / flipped back).
     if (
         temporal_gap > settings.quality_sequence_duplicate_seconds
-        and float(evidence["visual_similarity"]) >= settings.quality_duplicate_far_visual_threshold
-        and float(evidence["layout_similarity"]) >= 0.90
-        and (
-            content_match
-            or float(evidence["profile_similarity"]) >= 0.90
-            or float(evidence["text_structure_similarity"]) >= 0.88
-        )
+        and visual >= settings.quality_duplicate_far_visual_threshold
+        and layout >= 0.94
+        and profile >= 0.93
+        and content_diff <= settings.quality_duplicate_content_diff_threshold
     ):
         return True
 

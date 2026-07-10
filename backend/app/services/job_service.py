@@ -39,7 +39,6 @@ from app.processing.pipeline import (
     camera_detection_failed,
     collect_ocr_duplicate_notes,
     ocr_and_collapse_duplicates,
-    ocr_selected_pages,
 )
 from app.processing.page_fallback import FALLBACK_NOTE, ensure_pages_from_frames
 from app.processing.preview import attach_previews
