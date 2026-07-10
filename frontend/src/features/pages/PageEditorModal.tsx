@@ -1,4 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Crop,
+  EyeOff,
+  Loader2,
+  Pencil,
+  RotateCcw,
+  RotateCw,
+  Type,
+} from "lucide-react";
 import { resolveArtifactUrl } from "../../lib/api";
 import type {
   BlurRegion,
@@ -26,6 +35,13 @@ interface DragState {
 
 const MAX_CANVAS_WIDTH = 920;
 const MAX_CANVAS_HEIGHT = 640;
+
+const TOOL_CONFIG: { key: EditorTool; label: string; Icon: typeof Crop }[] = [
+  { key: "crop", label: "Crop", Icon: Crop },
+  { key: "draw", label: "Draw", Icon: Pencil },
+  { key: "text", label: "Text", Icon: Type },
+  { key: "blur", label: "Blur", Icon: EyeOff },
+];
 
 export function PageEditorModal({
   page,
@@ -246,34 +262,26 @@ export function PageEditorModal({
             <span className="section-eyebrow">Page editor</span>
             <h3>{page.previewLabel}</h3>
             <p className="muted">
-              Rotate, crop, draw, place text, and blur sensitive areas. Rotation and crop reset later overlays so coordinates stay reliable.
+              Rotate, crop, draw, place text, and blur sensitive areas.
             </p>
-          </div>
-          <div className="editor-modal__header-actions">
-            <button className="secondary-button" onClick={onClose} type="button">
-              Cancel
-            </button>
-            <button className="primary-button" disabled={isSaving || !imageReady} onClick={() => void handleSave()} type="button">
-              {isSaving ? "Saving..." : "Save edits"}
-            </button>
           </div>
         </div>
 
         <div className="editor-modal__body">
           <aside className="editor-sidebar">
-            <div className="editor-toolbar">
-              <button className={`secondary-button ${tool === "crop" ? "is-active" : ""}`} onClick={() => setTool("crop")} type="button">
-                Crop
-              </button>
-              <button className={`secondary-button ${tool === "draw" ? "is-active" : ""}`} onClick={() => setTool("draw")} type="button">
-                Draw
-              </button>
-              <button className={`secondary-button ${tool === "text" ? "is-active" : ""}`} onClick={() => setTool("text")} type="button">
-                Text
-              </button>
-              <button className={`secondary-button ${tool === "blur" ? "is-active" : ""}`} onClick={() => setTool("blur")} type="button">
-                Blur
-              </button>
+            <div className="editor-toolbar editor-toolbar--icons">
+              {TOOL_CONFIG.map(({ key, label, Icon }) => (
+                <button
+                  key={key}
+                  className={`secondary-button editor-tool-btn ${tool === key ? "is-active" : ""}`}
+                  onClick={() => setTool(key)}
+                  title={label}
+                  type="button"
+                >
+                  <Icon size={16} aria-hidden="true" />
+                  <span>{label}</span>
+                </button>
+              ))}
             </div>
 
             <div className="editor-control-group">
@@ -286,7 +294,8 @@ export function PageEditorModal({
                   }
                   type="button"
                 >
-                  Rotate left
+                  <RotateCcw size={14} aria-hidden="true" />
+                  Left
                 </button>
                 <button
                   className="secondary-button"
@@ -295,7 +304,8 @@ export function PageEditorModal({
                   }
                   type="button"
                 >
-                  Rotate right
+                  <RotateCw size={14} aria-hidden="true" />
+                  Right
                 </button>
               </div>
             </div>
@@ -304,11 +314,21 @@ export function PageEditorModal({
               <div className="editor-control-group">
                 <label>
                   <span>Stroke color</span>
-                  <input type="color" value={drawColor} onChange={(event) => setDrawColor(event.target.value)} />
+                  <input
+                    type="color"
+                    value={drawColor}
+                    onChange={(event) => setDrawColor(event.target.value)}
+                  />
                 </label>
                 <label>
                   <span>Stroke width</span>
-                  <input type="range" min={2} max={18} value={drawWidth} onChange={(event) => setDrawWidth(Number(event.target.value))} />
+                  <input
+                    type="range"
+                    min={2}
+                    max={18}
+                    value={drawWidth}
+                    onChange={(event) => setDrawWidth(Number(event.target.value))}
+                  />
                 </label>
               </div>
             ) : null}
@@ -321,11 +341,21 @@ export function PageEditorModal({
                 </label>
                 <label>
                   <span>Color</span>
-                  <input type="color" value={textColor} onChange={(event) => setTextColor(event.target.value)} />
+                  <input
+                    type="color"
+                    value={textColor}
+                    onChange={(event) => setTextColor(event.target.value)}
+                  />
                 </label>
                 <label>
                   <span>Font size</span>
-                  <input type="range" min={16} max={56} value={textSize} onChange={(event) => setTextSize(Number(event.target.value))} />
+                  <input
+                    type="range"
+                    min={16}
+                    max={56}
+                    value={textSize}
+                    onChange={(event) => setTextSize(Number(event.target.value))}
+                  />
                 </label>
                 <p className="muted">Click on the page to place text.</p>
               </div>
@@ -335,7 +365,14 @@ export function PageEditorModal({
               <div className="editor-control-group">
                 <label>
                   <span>Blur strength</span>
-                  <input type="range" min={9} max={41} step={2} value={blurIntensity} onChange={(event) => setBlurIntensity(Number(event.target.value))} />
+                  <input
+                    type="range"
+                    min={9}
+                    max={41}
+                    step={2}
+                    value={blurIntensity}
+                    onChange={(event) => setBlurIntensity(Number(event.target.value))}
+                  />
                 </label>
                 <p className="muted">Drag a rectangle over anything that should be hidden.</p>
               </div>
@@ -370,16 +407,10 @@ export function PageEditorModal({
                 Undo text
               </button>
               <button
-                className="secondary-button"
-                disabled={edits.blurRegions.length === 0}
-                onClick={() => setEdits({ ...edits, blurRegions: edits.blurRegions.slice(0, -1) })}
-                type="button"
-              >
-                Undo blur
-              </button>
-              <button
                 className="secondary-button danger-button"
-                onClick={() => setEdits({ rotation: 0, crop: null, strokes: [], texts: [], blurRegions: [] })}
+                onClick={() =>
+                  setEdits({ rotation: 0, crop: null, strokes: [], texts: [], blurRegions: [] })
+                }
                 type="button"
               >
                 Reset all
@@ -405,6 +436,27 @@ export function PageEditorModal({
               onPointerLeave={handlePointerUp}
             />
           </div>
+        </div>
+
+        <div className="editor-modal__footer">
+          <button className="secondary-button" onClick={onClose} type="button">
+            Cancel
+          </button>
+          <button
+            className="primary-button"
+            disabled={isSaving || !imageReady}
+            onClick={() => void handleSave()}
+            type="button"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 size={16} className="spin" aria-hidden="true" />
+                Saving…
+              </>
+            ) : (
+              "Save edits"
+            )}
+          </button>
         </div>
       </div>
     </div>
@@ -542,7 +594,7 @@ function buildPreviewCanvas(
   if (dragState && (tool === "crop" || tool === "blur")) {
     const region = normalizeRegion(dragState.start, dragState.current);
     croppedCtx.save();
-    croppedCtx.strokeStyle = tool === "crop" ? "#2563eb" : "#dc2626";
+    croppedCtx.strokeStyle = tool === "crop" ? "#0f766e" : "#dc2626";
     croppedCtx.lineWidth = 2;
     croppedCtx.setLineDash([10, 6]);
     croppedCtx.strokeRect(region.x, region.y, region.width, region.height);
