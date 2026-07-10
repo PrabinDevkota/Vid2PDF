@@ -4655,6 +4655,2396 @@
         "error": null
       },
       "upload_path": "backend\\data\\uploads\\7e57b9cfd87b-WhatsApp Video 2026-03-27 at 10.56.04 PM.mp4"
+    },
+    {
+      "id": "a8e21843d413",
+      "filename": "WhatsApp Video 2026-03-27 at 10.56.04 PM.mp4",
+      "processing_mode": "screen",
+      "status": "ready",
+      "created_at": "2026-07-10T17:44:32.109209+00:00",
+      "updated_at": "2026-07-10T17:59:08.530717+00:00",
+      "started_at": "2026-07-10T17:44:32.118467+00:00",
+      "completed_at": "2026-07-10T17:56:25.307851+00:00",
+      "current_stage_key": "extract_text",
+      "progress": {
+        "percent": 100,
+        "message": "Pages are ready for review."
+      },
+      "notes": [
+        "Pipeline completed in screen mode with background execution.",
+        "Pages can now be reviewed, reordered, rotated, deleted, and exported through backend-backed state.",
+        "Camera mode found no page contours; automatically switched to screen mode.",
+        "Processed video at 29.61 fps, 478x850, duration 35.6s.",
+        "Sampled 151 frames and detected 22 stable page segments.",
+        "Selected 22 representative frames, collapsed to 22 sequence-stable candidates, removed 2 duplicates, and kept 20 pages after deduplication.",
+        "Extracted text from 20 unique pages (20 with text).",
+        "Removed 2 near-duplicate page(s) after OCR text comparison.",
+        "Page 1: Selected from 4 candidate frames.",
+        "Page 1: Segment stability delta: 0.1766",
+        "Page 1: Immutable source image stored at /artifacts/jobs/a8e21843d413/source-pages/page-1-source.png.",
+        "Page 2: Selected from 2 candidate frames.",
+        "Page 2: Segment stability delta: 0.4585",
+        "Page 2: Immutable source image stored at /artifacts/jobs/a8e21843d413/source-pages/page-3-source.png.",
+        "Page 3: Selected from 2 candidate frames.",
+        "Page 3: Segment stability delta: 0.5312",
+        "Page 3: Immutable source image stored at /artifacts/jobs/a8e21843d413/source-pages/page-4-source.png.",
+        "Page 4: Selected from 1 candidate frames.",
+        "Page 4: Segment stability delta: 0.3007",
+        "Page 4: Immutable source image stored at /artifacts/jobs/a8e21843d413/source-pages/page-5-source.png.",
+        "Page 5: Selected from 8 candidate frames.",
+        "Page 5: Segment stability delta: 0.3004",
+        "Page 5: Immutable source image stored at /artifacts/jobs/a8e21843d413/source-pages/page-6-source.png.",
+        "Page 6: Selected from 3 candidate frames.",
+        "Page 6: Segment stability delta: 0.3308",
+        "Page 6: Immutable source image stored at /artifacts/jobs/a8e21843d413/source-pages/page-7-source.png.",
+        "Page 7: Selected from 5 candidate frames.",
+        "Page 7: Segment stability delta: 0.1749",
+        "Page 7: Immutable source image stored at /artifacts/jobs/a8e21843d413/source-pages/page-8-source.png.",
+        "Page 8: Selected from 2 candidate frames.",
+        "Page 8: Segment stability delta: 0.1932",
+        "Page 8: Immutable source image stored at /artifacts/jobs/a8e21843d413/source-pages/page-9-source.png.",
+        "Page 9: Selected from 6 candidate frames.",
+        "Page 9: Segment stability delta: 0.1629",
+        "Page 9: Immutable source image stored at /artifacts/jobs/a8e21843d413/source-pages/page-10-source.png.",
+        "Page 10: Selected from 3 candidate frames.",
+        "Page 10: Segment stability delta: 0.3407",
+        "Page 10: Immutable source image stored at /artifacts/jobs/a8e21843d413/source-pages/page-11-source.png.",
+        "Page 11: Selected from 1 candidate frames.",
+        "Page 11: Segment stability delta: 0.2809",
+        "Page 11: Immutable source image stored at /artifacts/jobs/a8e21843d413/source-pages/page-12-source.png.",
+        "Page 12: Selected from 7 candidate frames.",
+        "Page 12: Segment stability delta: 0.2141",
+        "Page 12: Immutable source image stored at /artifacts/jobs/a8e21843d413/source-pages/page-13-source.png.",
+        "Page 13: Selected from 3 candidate frames.",
+        "Page 13: Segment stability delta: 0.4634",
+        "Page 13: Immutable source image stored at /artifacts/jobs/a8e21843d413/source-pages/page-14-source.png.",
+        "Page 14: Selected from 3 candidate frames.",
+        "Page 14: Segment stability delta: 0.2283",
+        "Page 14: Immutable source image stored at /artifacts/jobs/a8e21843d413/source-pages/page-15-source.png.",
+        "Page 15: Selected from 2 candidate frames.",
+        "Page 15: Segment stability delta: 0.1996",
+        "Page 15: Immutable source image stored at /artifacts/jobs/a8e21843d413/source-pages/page-16-source.png.",
+        "Page 16: Selected from 1 candidate frames.",
+        "Page 16: Segment stability delta: 0.3308",
+        "Page 16: Immutable source image stored at /artifacts/jobs/a8e21843d413/source-pages/page-17-source.png.",
+        "Page 17: Selected from 13 candidate frames.",
+        "Page 17: Segment stability delta: 0.3083",
+        "Page 17: Immutable source image stored at /artifacts/jobs/a8e21843d413/source-pages/page-19-source.png.",
+        "Page 18: Selected from 3 candidate frames.",
+        "Page 18: Segment stability delta: 0.5713",
+        "Page 18: Immutable source image stored at /artifacts/jobs/a8e21843d413/source-pages/page-20-source.png.",
+        "Page 19: Selected from 8 candidate frames.",
+        "Page 19: Segment stability delta: 0.3183",
+        "Page 19: Immutable source image stored at /artifacts/jobs/a8e21843d413/source-pages/page-21-source.png.",
+        "Page 20: Selected from 9 candidate frames.",
+        "Page 20: Segment stability delta: 0.2497",
+        "Page 20: Immutable source image stored at /artifacts/jobs/a8e21843d413/source-pages/page-22-source.png."
+      ],
+      "stages": [
+        {
+          "key": "sample_frames",
+          "label": "Sample frames from the uploaded video",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T17:44:32.128199+00:00",
+          "completed_at": "2026-07-10T17:44:41.504292+00:00"
+        },
+        {
+          "key": "detect_segments",
+          "label": "Detect stable page-view segments",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T17:44:41.514635+00:00",
+          "completed_at": "2026-07-10T17:44:42.346161+00:00"
+        },
+        {
+          "key": "select_frames",
+          "label": "Select the clearest frame per segment",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T17:44:42.356193+00:00",
+          "completed_at": "2026-07-10T17:44:42.427856+00:00"
+        },
+        {
+          "key": "remove_duplicates",
+          "label": "Remove duplicate or weak pages",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T17:44:42.438821+00:00",
+          "completed_at": "2026-07-10T17:47:56.629230+00:00"
+        },
+        {
+          "key": "prepare_previews",
+          "label": "Prepare preview metadata",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T17:47:56.637775+00:00",
+          "completed_at": "2026-07-10T17:47:57.406611+00:00"
+        },
+        {
+          "key": "extract_text",
+          "label": "Extract text from unique page frames",
+          "status": "complete",
+          "progress_percent": 100,
+          "started_at": "2026-07-10T17:47:57.596056+00:00",
+          "completed_at": "2026-07-10T17:56:25.298244+00:00"
+        }
+      ],
+      "pages": [
+        {
+          "id": "page-1",
+          "job_id": "a8e21843d413",
+          "order_index": 0,
+          "page_number": 1,
+          "preview_label": "Page 1",
+          "thumbnail_url": "/artifacts/jobs/a8e21843d413/thumbnails/page-1-thumb.jpg",
+          "image_url": "/artifacts/jobs/a8e21843d413/pages/page-1.png",
+          "sharpness_score": 0.6281443301780117,
+          "segment_start": 0.0,
+          "segment_end": 1.6551111111111112,
+          "source_frame_index": 14,
+          "source_timestamp": 0.4728888888888889,
+          "manual": false,
+          "rotation": 0,
+          "status": "active",
+          "deleted": false,
+          "source_image_url": "/artifacts/jobs/a8e21843d413/source-pages/page-1-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": "ATOMIC HABITS An Easy & Proven Way to Build Good Habits & Break Bad Ones",
+          "ocr_blocks": [
+            {
+              "text": "ATOMIC HABITS",
+              "confidence": 96.0,
+              "top": 1066,
+              "left": 568
+            },
+            {
+              "text": "An Easy & Proven Way",
+              "confidence": 94.8,
+              "top": 1172,
+              "left": 618
+            },
+            {
+              "text": "to Build Good Habits &",
+              "confidence": 94.8,
+              "top": 1255,
+              "left": 614
+            },
+            {
+              "text": "Break Bad Ones",
+              "confidence": 96.0,
+              "top": 1341,
+              "left": 725
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        },
+        {
+          "id": "page-3",
+          "job_id": "a8e21843d413",
+          "order_index": 1,
+          "page_number": 2,
+          "preview_label": "Page 2",
+          "thumbnail_url": "/artifacts/jobs/a8e21843d413/thumbnails/page-3-thumb.jpg",
+          "image_url": "/artifacts/jobs/a8e21843d413/pages/page-3.png",
+          "sharpness_score": 0.08463660135789425,
+          "segment_start": 2.8373333333333335,
+          "segment_end": 3.073777777777778,
+          "source_frame_index": 91,
+          "source_timestamp": 3.073777777777778,
+          "manual": false,
+          "rotation": 0,
+          "status": "deleted",
+          "deleted": true,
+          "source_image_url": "/artifacts/jobs/a8e21843d413/source-pages/page-3-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": "i oa SLE renee . vA tS ; a aoe nm ge oO a rs ae tom fg = . 4 = i tog Bs Om .. nd == ae . - . = ae. i oF - 4 7 le",
+          "ocr_blocks": [
+            {
+              "text": "i oa SLE renee . vA tS ; a aoe nm ge oO a rs ae tom fg = . 4 = i tog Bs Om .. nd == ae . - . = ae. i oF - 4 7 le",
+              "confidence": 70.0,
+              "top": 0,
+              "left": 0
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        },
+        {
+          "id": "page-4",
+          "job_id": "a8e21843d413",
+          "order_index": 2,
+          "page_number": 3,
+          "preview_label": "Page 3",
+          "thumbnail_url": "/artifacts/jobs/a8e21843d413/thumbnails/page-4-thumb.jpg",
+          "image_url": "/artifacts/jobs/a8e21843d413/pages/page-4.png",
+          "sharpness_score": 0.16156757504985614,
+          "segment_start": 3.3102222222222224,
+          "segment_end": 3.546666666666667,
+          "source_frame_index": 105,
+          "source_timestamp": 3.546666666666667,
+          "manual": false,
+          "rotation": 0,
+          "status": "deleted",
+          "deleted": true,
+          "source_image_url": "/artifacts/jobs/a8e21843d413/source-pages/page-4-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": "JAMES CLEAR AS AL",
+          "ocr_blocks": [
+            {
+              "text": "JAMES CLEAR",
+              "confidence": 94.5,
+              "top": 1176,
+              "left": 263
+            },
+            {
+              "text": "AS",
+              "confidence": 91.0,
+              "top": 2980,
+              "left": 0
+            },
+            {
+              "text": "AL",
+              "confidence": 52.0,
+              "top": 3223,
+              "left": 95
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        },
+        {
+          "id": "page-5",
+          "job_id": "a8e21843d413",
+          "order_index": 3,
+          "page_number": 4,
+          "preview_label": "Page 4",
+          "thumbnail_url": "/artifacts/jobs/a8e21843d413/thumbnails/page-5-thumb.jpg",
+          "image_url": "/artifacts/jobs/a8e21843d413/pages/page-5.png",
+          "sharpness_score": 0.6019009156229761,
+          "segment_start": 3.7831111111111113,
+          "segment_end": 4.965333333333334,
+          "source_frame_index": 126,
+          "source_timestamp": 4.256,
+          "manual": false,
+          "rotation": 0,
+          "status": "active",
+          "deleted": false,
+          "source_image_url": "/artifacts/jobs/a8e21843d413/source-pages/page-5-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": "JAM ESC cl\n\na",
+          "ocr_blocks": [
+            {
+              "text": "JAM ESC cl",
+              "confidence": 70.0,
+              "top": 0,
+              "left": 0
+            },
+            {
+              "text": "a",
+              "confidence": 70.0,
+              "top": 30,
+              "left": 0
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        },
+        {
+          "id": "page-6",
+          "job_id": "a8e21843d413",
+          "order_index": 4,
+          "page_number": 5,
+          "preview_label": "Page 5",
+          "thumbnail_url": "/artifacts/jobs/a8e21843d413/thumbnails/page-6-thumb.jpg",
+          "image_url": "/artifacts/jobs/a8e21843d413/pages/page-6.png",
+          "sharpness_score": 0.8143406569487446,
+          "segment_start": 5.201777777777778,
+          "segment_end": 7.566222222222223,
+          "source_frame_index": 189,
+          "source_timestamp": 6.384,
+          "manual": false,
+          "rotation": 0,
+          "status": "active",
+          "deleted": false,
+          "source_image_url": "/artifacts/jobs/a8e21843d413/source-pages/page-6-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": "ATOMIC HABITS\n\nAn Easy and Proven Way to Build Good Habits and Break Bad Ones\n\nTiny Changes, Remarkable Results",
+          "ocr_blocks": [
+            {
+              "text": "ATOMIC",
+              "confidence": 96.0,
+              "top": 891,
+              "left": 455
+            },
+            {
+              "text": "HABITS",
+              "confidence": 96.0,
+              "top": 1145,
+              "left": 481
+            },
+            {
+              "text": "An Easy and Proven Way",
+              "confidence": 95.6,
+              "top": 1498,
+              "left": 576
+            },
+            {
+              "text": "to Build Good Habits and",
+              "confidence": 95.8,
+              "top": 1578,
+              "left": 581
+            },
+            {
+              "text": "Break Bad Ones",
+              "confidence": 96.0,
+              "top": 1658,
+              "left": 707
+            },
+            {
+              "text": "Tiny Changes,",
+              "confidence": 93.5,
+              "top": 2333,
+              "left": 476
+            },
+            {
+              "text": "Remarkable",
+              "confidence": 96.0,
+              "top": 2492,
+              "left": 545
+            },
+            {
+              "text": "Results",
+              "confidence": 95.0,
+              "top": 2656,
+              "left": 678
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        },
+        {
+          "id": "page-7",
+          "job_id": "a8e21843d413",
+          "order_index": 5,
+          "page_number": 6,
+          "preview_label": "Page 6",
+          "thumbnail_url": "/artifacts/jobs/a8e21843d413/thumbnails/page-7-thumb.jpg",
+          "image_url": "/artifacts/jobs/a8e21843d413/pages/page-7.png",
+          "sharpness_score": 0.3728411298405241,
+          "segment_start": 7.802666666666667,
+          "segment_end": 8.748444444444445,
+          "source_frame_index": 245,
+          "source_timestamp": 8.275555555555556,
+          "manual": false,
+          "rotation": 0,
+          "status": "deleted",
+          "deleted": true,
+          "source_image_url": "/artifacts/jobs/a8e21843d413/source-pages/page-7-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": "20\n\nmes a5 Buttor of as Pt co Hstects Act 1968\n\nOuse Summess Sook; m208 Avery 20%\n\na-toaic\n\no tara\n\non extremety small amourt of 3 th\n\nS-ge rrecucite unt of 2 larger sy\n\nie source of mmense enersy\n\noF &",
+          "ocr_blocks": [
+            {
+              "text": "20",
+              "confidence": 70.0,
+              "top": 0,
+              "left": 0
+            },
+            {
+              "text": "mes a5 Buttor of as Pt co Hstects Act 1968",
+              "confidence": 70.0,
+              "top": 30,
+              "left": 0
+            },
+            {
+              "text": "Ouse Summess Sook; m208 Avery 20%",
+              "confidence": 70.0,
+              "top": 60,
+              "left": 0
+            },
+            {
+              "text": "a-toaic",
+              "confidence": 70.0,
+              "top": 90,
+              "left": 0
+            },
+            {
+              "text": "o tara",
+              "confidence": 70.0,
+              "top": 120,
+              "left": 0
+            },
+            {
+              "text": "on extremety small amourt of 3 th",
+              "confidence": 70.0,
+              "top": 150,
+              "left": 0
+            },
+            {
+              "text": "S-ge rrecucite unt of 2 larger sy",
+              "confidence": 70.0,
+              "top": 180,
+              "left": 0
+            },
+            {
+              "text": "ie source of mmense enersy",
+              "confidence": 70.0,
+              "top": 210,
+              "left": 0
+            },
+            {
+              "text": "oF &",
+              "confidence": 70.0,
+              "top": 240,
+              "left": 0
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        },
+        {
+          "id": "page-8",
+          "job_id": "a8e21843d413",
+          "order_index": 6,
+          "page_number": 7,
+          "preview_label": "Page 7",
+          "thumbnail_url": "/artifacts/jobs/a8e21843d413/thumbnails/page-8-thumb.jpg",
+          "image_url": "/artifacts/jobs/a8e21843d413/pages/page-8.png",
+          "sharpness_score": 1.0311998835920866,
+          "segment_start": 8.98488888888889,
+          "segment_end": 10.64,
+          "source_frame_index": 294,
+          "source_timestamp": 9.930666666666667,
+          "manual": false,
+          "rotation": 0,
+          "status": "active",
+          "deleted": false,
+          "source_image_url": "/artifacts/jobs/a8e21843d413/source-pages/page-8-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": "3 Random House Business - 20 Vauxhall Bridge Road London SWIV 2SA In Random House group of Random Mouse Business is part of the Pengu ompanies whose addresses can be found at global.penguinrandomhouse.com, 0)\n\nCopyright James Clear 2018 is ri i ified as the author of this James Clear has asserted his right to be identi Work in accordance with the Designs and Patents Act 1988. First published in the United Kingdom by Random House Business Books in 2018 First published in the United States by Avery in 2018\n\nA CIP catalogue record for this book is available from the British Library. ISBN Printed and bound by Thomson Press india Ltd. The representative in the EEA is Penguin Random House Ireland, Morrison Chambers, 32 Nassau Street, Dublin DO2 YH6S8. Penguin Random House is commiltted tO 6 Susic\u00bb able future for our business, our readers and our planet. This book is made from Forest Stewardship Council* certified paper.",
+          "ocr_blocks": [
+            {
+              "text": "3",
+              "confidence": 70.0,
+              "top": 601,
+              "left": 1025
+            },
+            {
+              "text": "Random House Business -",
+              "confidence": 89.5,
+              "top": 677,
+              "left": 806
+            },
+            {
+              "text": "20 Vauxhall Bridge Road",
+              "confidence": 95.0,
+              "top": 722,
+              "left": 802
+            },
+            {
+              "text": "London SWIV 2SA",
+              "confidence": 82.33333333333333,
+              "top": 767,
+              "left": 852
+            },
+            {
+              "text": "In Random House group of",
+              "confidence": 93.0,
+              "top": 859,
+              "left": 1196
+            },
+            {
+              "text": "Random Mouse Business is part of the Pengu",
+              "confidence": 92.25,
+              "top": 861,
+              "left": 371
+            },
+            {
+              "text": "ompanies whose addresses can be found at global.penguinrandomhouse.com,",
+              "confidence": 92.0,
+              "top": 904,
+              "left": 321
+            },
+            {
+              "text": "0)",
+              "confidence": 48.0,
+              "top": 987,
+              "left": 776
+            },
+            {
+              "text": "Copyright James Clear 2018",
+              "confidence": 95.4,
+              "top": 1182,
+              "left": 723
+            },
+            {
+              "text": "is ri i ified as the author of this",
+              "confidence": 94.77777777777777,
+              "top": 1275,
+              "left": 853
+            },
+            {
+              "text": "James Clear has asserted his right to be identi",
+              "confidence": 95.22222222222223,
+              "top": 1277,
+              "left": 355
+            },
+            {
+              "text": "Work in accordance with the Designs and Patents Act 1988.",
+              "confidence": 85.27272727272727,
+              "top": 1324,
+              "left": 355
+            },
+            {
+              "text": "First published in the United Kingdom by Random House Business Books in 2018",
+              "confidence": 91.61538461538461,
+              "top": 1418,
+              "left": 260
+            },
+            {
+              "text": "First published in the United States by Avery in 2018",
+              "confidence": 95.6,
+              "top": 1467,
+              "left": 508
+            },
+            {
+              "text": "A CIP catalogue record for this book is available from the British Library.",
+              "confidence": 92.76923076923077,
+              "top": 1659,
+              "left": 318
+            },
+            {
+              "text": "ISBN",
+              "confidence": 92.0,
+              "top": 1756,
+              "left": 790
+            },
+            {
+              "text": "Printed and bound by Thomson Press india Ltd.",
+              "confidence": 61.6,
+              "top": 1849,
+              "left": 448
+            },
+            {
+              "text": "The representative in the EEA is Penguin Random House Ireland,",
+              "confidence": 84.0,
+              "top": 1944,
+              "left": 269
+            },
+            {
+              "text": "Morrison Chambers, 32 Nassau Street, Dublin DO2 YH6S8.",
+              "confidence": 87.75,
+              "top": 1996,
+              "left": 439
+            },
+            {
+              "text": "Penguin Random House is commiltted tO 6 Susic\u00bb able future",
+              "confidence": 85.6,
+              "top": 2091,
+              "left": 397
+            },
+            {
+              "text": "for our business, our readers and our planet. This book is made",
+              "confidence": 92.91666666666667,
+              "top": 2139,
+              "left": 371
+            },
+            {
+              "text": "from Forest Stewardship Council* certified paper.",
+              "confidence": 83.83333333333333,
+              "top": 2192,
+              "left": 496
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        },
+        {
+          "id": "page-9",
+          "job_id": "a8e21843d413",
+          "order_index": 7,
+          "page_number": 8,
+          "preview_label": "Page 8",
+          "thumbnail_url": "/artifacts/jobs/a8e21843d413/thumbnails/page-9-thumb.jpg",
+          "image_url": "/artifacts/jobs/a8e21843d413/pages/page-9.png",
+          "sharpness_score": 0.28531695443380933,
+          "segment_start": 10.876444444444445,
+          "segment_end": 11.11288888888889,
+          "source_frame_index": 322,
+          "source_timestamp": 10.876444444444445,
+          "manual": false,
+          "rotation": 0,
+          "status": "deleted",
+          "deleted": true,
+          "source_image_url": "/artifacts/jobs/a8e21843d413/source-pages/page-9-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": "=. Sr a.\n\nel eC =\n\nOSE a - = ae a Le . 7 i\n\n=\n\na rr a",
+          "ocr_blocks": [
+            {
+              "text": "=. Sr a.",
+              "confidence": 70.0,
+              "top": 0,
+              "left": 0
+            },
+            {
+              "text": "el eC =",
+              "confidence": 70.0,
+              "top": 30,
+              "left": 0
+            },
+            {
+              "text": "OSE a - = ae a Le . 7 i",
+              "confidence": 70.0,
+              "top": 60,
+              "left": 0
+            },
+            {
+              "text": "=",
+              "confidence": 70.0,
+              "top": 90,
+              "left": 0
+            },
+            {
+              "text": "a rr a",
+              "confidence": 70.0,
+              "top": 120,
+              "left": 0
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        },
+        {
+          "id": "page-10",
+          "job_id": "a8e21843d413",
+          "order_index": 8,
+          "page_number": 9,
+          "preview_label": "Page 9",
+          "thumbnail_url": "/artifacts/jobs/a8e21843d413/thumbnails/page-10-thumb.jpg",
+          "image_url": "/artifacts/jobs/a8e21843d413/pages/page-10.png",
+          "sharpness_score": 0.7155388403261053,
+          "segment_start": 11.349333333333334,
+          "segment_end": 13.713777777777779,
+          "source_frame_index": 371,
+          "source_timestamp": 12.531555555555556,
+          "manual": false,
+          "rotation": 0,
+          "status": "active",
+          "deleted": false,
+          "source_image_url": "/artifacts/jobs/a8e21843d413/source-pages/page-10-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": "1. an extremely small amount of a thing; the single irreducible unit of a larger system. 2. the source of immense energy or power.\n\n1. a routine or practice performed regularly; an automatic response to a specific situa- tion.",
+          "ocr_blocks": [
+            {
+              "text": "1. an extremely small amount of a thing; the",
+              "confidence": 94.88888888888889,
+              "top": 1288,
+              "left": 324
+            },
+            {
+              "text": "single irreducible unit of a larger system.",
+              "confidence": 95.71428571428571,
+              "top": 1369,
+              "left": 388
+            },
+            {
+              "text": "2. the source of immense energy or power.",
+              "confidence": 95.625,
+              "top": 1483,
+              "left": 313
+            },
+            {
+              "text": "1. a routine or practice performed regularly;",
+              "confidence": 93.57142857142857,
+              "top": 1938,
+              "left": 287
+            },
+            {
+              "text": "an automatic response to a specific situa-",
+              "confidence": 94.57142857142857,
+              "top": 2029,
+              "left": 350
+            },
+            {
+              "text": "tion.",
+              "confidence": 96.0,
+              "top": 2119,
+              "left": 346
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        },
+        {
+          "id": "page-11",
+          "job_id": "a8e21843d413",
+          "order_index": 9,
+          "page_number": 10,
+          "preview_label": "Page 10",
+          "thumbnail_url": "/artifacts/jobs/a8e21843d413/thumbnails/page-11-thumb.jpg",
+          "image_url": "/artifacts/jobs/a8e21843d413/pages/page-11.png",
+          "sharpness_score": 0.29135331787643826,
+          "segment_start": 13.950222222222223,
+          "segment_end": 14.423111111111112,
+          "source_frame_index": 420,
+          "source_timestamp": 14.186666666666667,
+          "manual": false,
+          "rotation": 0,
+          "status": "active",
+          "deleted": false,
+          "source_image_url": "/artifacts/jobs/a8e21843d413/source-pages/page-11-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": "a\n\niad\n\na 2 mS ONS\n\n7\n\nAON\n\naf5\n\nvos aA, Bene\n\nyy\n\nat\n\nSar\n\nao Pe\n\n14\n\n4",
+          "ocr_blocks": [
+            {
+              "text": "a",
+              "confidence": 70.0,
+              "top": 0,
+              "left": 0
+            },
+            {
+              "text": "iad",
+              "confidence": 70.0,
+              "top": 30,
+              "left": 0
+            },
+            {
+              "text": "a 2 mS ONS",
+              "confidence": 70.0,
+              "top": 60,
+              "left": 0
+            },
+            {
+              "text": "7",
+              "confidence": 70.0,
+              "top": 90,
+              "left": 0
+            },
+            {
+              "text": "AON",
+              "confidence": 70.0,
+              "top": 120,
+              "left": 0
+            },
+            {
+              "text": "af5",
+              "confidence": 70.0,
+              "top": 150,
+              "left": 0
+            },
+            {
+              "text": "vos aA, Bene",
+              "confidence": 70.0,
+              "top": 180,
+              "left": 0
+            },
+            {
+              "text": "yy",
+              "confidence": 70.0,
+              "top": 210,
+              "left": 0
+            },
+            {
+              "text": "at",
+              "confidence": 70.0,
+              "top": 240,
+              "left": 0
+            },
+            {
+              "text": "Sar",
+              "confidence": 70.0,
+              "top": 270,
+              "left": 0
+            },
+            {
+              "text": "ao Pe",
+              "confidence": 70.0,
+              "top": 300,
+              "left": 0
+            },
+            {
+              "text": "14",
+              "confidence": 70.0,
+              "top": 330,
+              "left": 0
+            },
+            {
+              "text": "4",
+              "confidence": 70.0,
+              "top": 360,
+              "left": 0
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        },
+        {
+          "id": "page-12",
+          "job_id": "a8e21843d413",
+          "order_index": 10,
+          "page_number": 11,
+          "preview_label": "Page 11",
+          "thumbnail_url": "/artifacts/jobs/a8e21843d413/thumbnails/page-12-thumb.jpg",
+          "image_url": "/artifacts/jobs/a8e21843d413/pages/page-12.png",
+          "sharpness_score": 0.5928043488823798,
+          "segment_start": 14.659555555555556,
+          "segment_end": 15.132444444444445,
+          "source_frame_index": 441,
+          "source_timestamp": 14.896,
+          "manual": false,
+          "rotation": 0,
+          "status": "deleted",
+          "deleted": true,
+          "source_image_url": "/artifacts/jobs/a8e21843d413/source-pages/page-12-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": "Content\n\nIntroduction My Story The Fundamenta! Why Tiny Changes Make a Bi The Surprising Power of Atomiz Hab: How Your Habits Shape Your Identity How to Buiict Better Habits in 4 Simp\n\nThe Ist Law Make It Obvious The Man Who Didn't Look Right The Best Way to Start a New Habit Motivation Is Overrated: Environmen Often Matters More The Secret to Self-Control!",
+          "ocr_blocks": [
+            {
+              "text": "Content",
+              "confidence": 96.0,
+              "top": 906,
+              "left": 1617
+            },
+            {
+              "text": "Introduction My Story",
+              "confidence": 90.66666666666667,
+              "top": 1392,
+              "left": 1063
+            },
+            {
+              "text": "The Fundamenta!",
+              "confidence": 78.0,
+              "top": 1658,
+              "left": 1483
+            },
+            {
+              "text": "Why Tiny Changes Make a Bi",
+              "confidence": 95.0,
+              "top": 1721,
+              "left": 1166
+            },
+            {
+              "text": "The Surprising Power of Atomiz Hab:",
+              "confidence": 90.16666666666667,
+              "top": 1871,
+              "left": 1028
+            },
+            {
+              "text": "How Your Habits Shape Your Identity",
+              "confidence": 90.0,
+              "top": 1999,
+              "left": 1021
+            },
+            {
+              "text": "How to Buiict Better Habits in 4 Simp",
+              "confidence": 86.625,
+              "top": 2127,
+              "left": 1013
+            },
+            {
+              "text": "The Ist Law",
+              "confidence": 95.0,
+              "top": 2439,
+              "left": 1577
+            },
+            {
+              "text": "Make It Obvious",
+              "confidence": 95.66666666666667,
+              "top": 2517,
+              "left": 1512
+            },
+            {
+              "text": "The Man Who Didn't Look Right",
+              "confidence": 93.83333333333333,
+              "top": 2665,
+              "left": 985
+            },
+            {
+              "text": "The Best Way to Start a New Habit",
+              "confidence": 95.75,
+              "top": 2807,
+              "left": 979
+            },
+            {
+              "text": "Motivation Is Overrated: Environmen",
+              "confidence": 92.5,
+              "top": 2952,
+              "left": 971
+            },
+            {
+              "text": "Often Matters More",
+              "confidence": 96.0,
+              "top": 3044,
+              "left": 964
+            },
+            {
+              "text": "The Secret to Self-Control!",
+              "confidence": 78.5,
+              "top": 3189,
+              "left": 959
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        },
+        {
+          "id": "page-13",
+          "job_id": "a8e21843d413",
+          "order_index": 11,
+          "page_number": 12,
+          "preview_label": "Page 12",
+          "thumbnail_url": "/artifacts/jobs/a8e21843d413/thumbnails/page-13-thumb.jpg",
+          "image_url": "/artifacts/jobs/a8e21843d413/pages/page-13.png",
+          "sharpness_score": 0.7662019763782948,
+          "segment_start": 15.36888888888889,
+          "segment_end": 17.733333333333334,
+          "source_frame_index": 497,
+          "source_timestamp": 16.787555555555556,
+          "manual": false,
+          "rotation": 0,
+          "status": "active",
+          "deleted": false,
+          "source_image_url": "/artifacts/jobs/a8e21843d413/source-pages/page-13-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": "Contents\n\nIntroduction: My Story 1\n\nThe Fundamentals Why Tiny Changes Make a Big Difference 1 The Surprising Power of Habits 13 2 How Your Habits Shape Your Identity (end Vice Versa) 29 3 How to Build Better Habits in 4 Simple Steps 43\n\nThe Ist Law Make It Obvious 4 The Man Who Didn't Look Right 59 5 The Best Way to Start a New Habit 69 6 Motivation Is Overrated; Environment Often Matters More 81 7 The Secret to Self-Control 91",
+          "ocr_blocks": [
+            {
+              "text": "Contents",
+              "confidence": 96.0,
+              "top": 773,
+              "left": 751
+            },
+            {
+              "text": "Introduction: My Story 1",
+              "confidence": 80.75,
+              "top": 1230,
+              "left": 241
+            },
+            {
+              "text": "The Fundamentals",
+              "confidence": 95.0,
+              "top": 1468,
+              "left": 632
+            },
+            {
+              "text": "Why Tiny Changes Make a Big Difference",
+              "confidence": 95.57142857142857,
+              "top": 1535,
+              "left": 338
+            },
+            {
+              "text": "1 The Surprising Power of Habits 13",
+              "confidence": 74.44444444444444,
+              "top": 1671,
+              "left": 153
+            },
+            {
+              "text": "2 How Your Habits Shape Your Identity (end Vice Versa) 29",
+              "confidence": 93.63636363636364,
+              "top": 1795,
+              "left": 134
+            },
+            {
+              "text": "3 How to Build Better Habits in 4 Simple Steps 43",
+              "confidence": 91.18181818181819,
+              "top": 1911,
+              "left": 129
+            },
+            {
+              "text": "The Ist Law",
+              "confidence": 95.33333333333333,
+              "top": 2172,
+              "left": 718
+            },
+            {
+              "text": "Make It Obvious",
+              "confidence": 90.0,
+              "top": 2244,
+              "left": 657
+            },
+            {
+              "text": "4 The Man Who Didn't Look Right 59",
+              "confidence": 92.25,
+              "top": 2403,
+              "left": 92
+            },
+            {
+              "text": "5 The Best Way to Start a New Habit 69",
+              "confidence": 94.7,
+              "top": 2531,
+              "left": 89
+            },
+            {
+              "text": "6 Motivation Is Overrated; Environment",
+              "confidence": 88.8,
+              "top": 2664,
+              "left": 79
+            },
+            {
+              "text": "Often Matters More 81",
+              "confidence": 94.0,
+              "top": 2746,
+              "left": 146
+            },
+            {
+              "text": "7 The Secret to Self-Control 91",
+              "confidence": 92.0,
+              "top": 2858,
+              "left": 72
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        },
+        {
+          "id": "page-14",
+          "job_id": "a8e21843d413",
+          "order_index": 12,
+          "page_number": 13,
+          "preview_label": "Page 13",
+          "thumbnail_url": "/artifacts/jobs/a8e21843d413/thumbnails/page-14-thumb.jpg",
+          "image_url": "/artifacts/jobs/a8e21843d413/pages/page-14.png",
+          "sharpness_score": 0.1643972402091729,
+          "segment_start": 17.96977777777778,
+          "segment_end": 18.679111111111112,
+          "source_frame_index": 539,
+          "source_timestamp": 18.206222222222223,
+          "manual": false,
+          "rotation": 0,
+          "status": "deleted",
+          "deleted": true,
+          "source_image_url": "/artifacts/jobs/a8e21843d413/source-pages/page-14-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": "nd\n\nit\n\nlik\n\n. ewes Irma : a ad . - on :",
+          "ocr_blocks": [
+            {
+              "text": "nd",
+              "confidence": 70.0,
+              "top": 0,
+              "left": 0
+            },
+            {
+              "text": "it",
+              "confidence": 70.0,
+              "top": 30,
+              "left": 0
+            },
+            {
+              "text": "lik",
+              "confidence": 70.0,
+              "top": 60,
+              "left": 0
+            },
+            {
+              "text": ". ewes Irma : a ad . - on :",
+              "confidence": 70.0,
+              "top": 90,
+              "left": 0
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        },
+        {
+          "id": "page-15",
+          "job_id": "a8e21843d413",
+          "order_index": 13,
+          "page_number": 14,
+          "preview_label": "Page 14",
+          "thumbnail_url": "/artifacts/jobs/a8e21843d413/thumbnails/page-15-thumb.jpg",
+          "image_url": "/artifacts/jobs/a8e21843d413/pages/page-15.png",
+          "sharpness_score": 0.7493573062323755,
+          "segment_start": 18.915555555555557,
+          "segment_end": 20.570666666666668,
+          "source_frame_index": 588,
+          "source_timestamp": 19.861333333333334,
+          "manual": false,
+          "rotation": 0,
+          "status": "active",
+          "deleted": false,
+          "source_image_url": "/artifacts/jobs/a8e21843d413/source-pages/page-15-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": "vill Contents Tho 2nd Law Make It Attractive\n\nHow to Make a Habit Irresistible 10) mily and Friends in Shaping Your Habits The Role of Fa 10 How to Find and Fix the Causes of Your Bad Habits\n\nThe 3rd Law Make It Easy\n\n1 Walk Slowly, but Never Backward 141 12 The Law of Least Effort 149 13, How to Stop Procrastinating by Using the Two-Minute Rule 14 How to Make Good Habits Inevitable and Bad Habits Impossible 169\n\nThe 4th Law Make It Satisfying . IS The Cardinal Rule of Behavior Change 183 16 How to Stick with Good Habits Every Day 195 17 How an Accountabilit Partner Can Change Everything 205",
+          "ocr_blocks": [
+            {
+              "text": "vill Contents",
+              "confidence": 46.666666666666664,
+              "top": 266,
+              "left": 297
+            },
+            {
+              "text": "Tho 2nd Law",
+              "confidence": 94.66666666666667,
+              "top": 363,
+              "left": 835
+            },
+            {
+              "text": "Make It Attractive",
+              "confidence": 93.33333333333333,
+              "top": 422,
+              "left": 770
+            },
+            {
+              "text": "How to Make a Habit Irresistible",
+              "confidence": 75.57142857142857,
+              "top": 561,
+              "left": 294
+            },
+            {
+              "text": "10)",
+              "confidence": 81.0,
+              "top": 594,
+              "left": 1851
+            },
+            {
+              "text": "mily and Friends in Shaping Your Habits",
+              "confidence": 93.42857142857143,
+              "top": 669,
+              "left": 674
+            },
+            {
+              "text": "The Role of Fa",
+              "confidence": 91.4,
+              "top": 690,
+              "left": 285
+            },
+            {
+              "text": "10 How to Find and Fix the Causes of Your Bad Habits",
+              "confidence": 94.83333333333333,
+              "top": 782,
+              "left": 257
+            },
+            {
+              "text": "The 3rd Law",
+              "confidence": 96.0,
+              "top": 1034,
+              "left": 796
+            },
+            {
+              "text": "Make It Easy",
+              "confidence": 95.33333333333333,
+              "top": 1103,
+              "left": 794
+            },
+            {
+              "text": "1 Walk Slowly, but Never Backward",
+              "confidence": 86.5,
+              "top": 1251,
+              "left": 236
+            },
+            {
+              "text": "141",
+              "confidence": 86.0,
+              "top": 1279,
+              "left": 1854
+            },
+            {
+              "text": "12 The Law of Least Effort",
+              "confidence": 95.66666666666667,
+              "top": 1372,
+              "left": 216
+            },
+            {
+              "text": "149",
+              "confidence": 96.0,
+              "top": 1397,
+              "left": 1841
+            },
+            {
+              "text": "13, How to Stop Procrastinating by Using",
+              "confidence": 91.0,
+              "top": 1492,
+              "left": 206
+            },
+            {
+              "text": "the Two-Minute Rule",
+              "confidence": 96.0,
+              "top": 1567,
+              "left": 278
+            },
+            {
+              "text": "14 How to Make Good Habits Inevitable",
+              "confidence": 91.42857142857143,
+              "top": 1686,
+              "left": 187
+            },
+            {
+              "text": "and Bad Habits Impossible",
+              "confidence": 95.25,
+              "top": 1760,
+              "left": 258
+            },
+            {
+              "text": "169",
+              "confidence": 96.0,
+              "top": 1804,
+              "left": 1837
+            },
+            {
+              "text": "The 4th Law",
+              "confidence": 95.66666666666667,
+              "top": 2033,
+              "left": 740
+            },
+            {
+              "text": "Make It Satisfying .",
+              "confidence": 91.5,
+              "top": 2107,
+              "left": 669
+            },
+            {
+              "text": "IS The Cardinal Rule of Behavior Change",
+              "confidence": 82.85714285714286,
+              "top": 2245,
+              "left": 143
+            },
+            {
+              "text": "183",
+              "confidence": 95.0,
+              "top": 2331,
+              "left": 1837
+            },
+            {
+              "text": "16 How to Stick with Good Habits Every Day",
+              "confidence": 91.66666666666667,
+              "top": 2368,
+              "left": 130
+            },
+            {
+              "text": "195",
+              "confidence": 96.0,
+              "top": 2468,
+              "left": 1837
+            },
+            {
+              "text": "17 How an Accountabilit",
+              "confidence": 88.75,
+              "top": 2494,
+              "left": 121
+            },
+            {
+              "text": "Partner Can",
+              "confidence": 93.33333333333333,
+              "top": 2535,
+              "left": 728
+            },
+            {
+              "text": "Change Everything",
+              "confidence": 66.66666666666667,
+              "top": 2580,
+              "left": 195
+            },
+            {
+              "text": "205",
+              "confidence": 96.0,
+              "top": 2697,
+              "left": 1823
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        },
+        {
+          "id": "page-16",
+          "job_id": "a8e21843d413",
+          "order_index": 14,
+          "page_number": 15,
+          "preview_label": "Page 15",
+          "thumbnail_url": "/artifacts/jobs/a8e21843d413/thumbnails/page-16-thumb.jpg",
+          "image_url": "/artifacts/jobs/a8e21843d413/pages/page-16.png",
+          "sharpness_score": 0.661663201844679,
+          "segment_start": 20.807111111111112,
+          "segment_end": 21.75288888888889,
+          "source_frame_index": 630,
+          "source_timestamp": 21.28,
+          "manual": false,
+          "rotation": 0,
+          "status": "active",
+          "deleted": false,
+          "source_image_url": "/artifacts/jobs/a8e21843d413/source-pages/page-16-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": "Advanced Tactics how to Go from Being Meraly 6000 to Being Truly Great\n\nif The Truth) About Talent (When Genes Matiar and When hey Don't)\n\n19 The Goldilocks Rule How to Stay Motivated in Life and Work\n\n270 The Downside of reating Good\n\nConclusion: The Secret to Results That Last\n\nAppendix What Should You Read Next? 257 Little Lessons from the Four Laws 253 How to Apply These Ideas to Business 265 How to Apply These ideas to Parenting 267 Acknowledgments 269 Notes 273 index 299",
+          "ocr_blocks": [
+            {
+              "text": "Advanced Tactics",
+              "confidence": 93.5,
+              "top": 488,
+              "left": 695
+            },
+            {
+              "text": "how to Go from Being Meraly",
+              "confidence": 79.33333333333333,
+              "top": 540,
+              "left": 544
+            },
+            {
+              "text": "6000 to Being Truly Great",
+              "confidence": 79.4,
+              "top": 604,
+              "left": 585
+            },
+            {
+              "text": "if The Truth) About Talent",
+              "confidence": 67.0,
+              "top": 726,
+              "left": 187
+            },
+            {
+              "text": "(When Genes Matiar and When hey Don't)",
+              "confidence": 70.0,
+              "top": 794,
+              "left": 262
+            },
+            {
+              "text": "19 The Goldilocks Rule How to Stay Motivated",
+              "confidence": 86.5,
+              "top": 897,
+              "left": 171
+            },
+            {
+              "text": "in Life and Work",
+              "confidence": 91.5,
+              "top": 965,
+              "left": 250
+            },
+            {
+              "text": "270 The Downside of reating Good",
+              "confidence": 77.875,
+              "top": 1074,
+              "left": 141
+            },
+            {
+              "text": "Conclusion: The Secret to Results That Last",
+              "confidence": 92.57142857142857,
+              "top": 1324,
+              "left": 229
+            },
+            {
+              "text": "Appendix",
+              "confidence": 92.0,
+              "top": 1538,
+              "left": 761
+            },
+            {
+              "text": "What Should You Read Next?",
+              "confidence": 95.2,
+              "top": 1606,
+              "left": 210
+            },
+            {
+              "text": "257",
+              "confidence": 92.0,
+              "top": 1648,
+              "left": 1746
+            },
+            {
+              "text": "Little Lessons from the Four Laws",
+              "confidence": 95.16666666666667,
+              "top": 1681,
+              "left": 203
+            },
+            {
+              "text": "253",
+              "confidence": 83.0,
+              "top": 1722,
+              "left": 1746
+            },
+            {
+              "text": "How to Apply These Ideas to Business",
+              "confidence": 93.28571428571429,
+              "top": 1759,
+              "left": 196
+            },
+            {
+              "text": "265",
+              "confidence": 96.0,
+              "top": 1795,
+              "left": 1749
+            },
+            {
+              "text": "How to Apply These ideas to Parenting",
+              "confidence": 92.28571428571429,
+              "top": 1834,
+              "left": 190
+            },
+            {
+              "text": "267",
+              "confidence": 96.0,
+              "top": 1871,
+              "left": 1752
+            },
+            {
+              "text": "Acknowledgments",
+              "confidence": 89.0,
+              "top": 1912,
+              "left": 183
+            },
+            {
+              "text": "269",
+              "confidence": 96.0,
+              "top": 1949,
+              "left": 1753
+            },
+            {
+              "text": "Notes",
+              "confidence": 94.0,
+              "top": 1991,
+              "left": 177
+            },
+            {
+              "text": "273",
+              "confidence": 96.0,
+              "top": 2026,
+              "left": 1760
+            },
+            {
+              "text": "index",
+              "confidence": 95.0,
+              "top": 2070,
+              "left": 171
+            },
+            {
+              "text": "299",
+              "confidence": 85.0,
+              "top": 2104,
+              "left": 1756
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        },
+        {
+          "id": "page-17",
+          "job_id": "a8e21843d413",
+          "order_index": 15,
+          "page_number": 16,
+          "preview_label": "Page 16",
+          "thumbnail_url": "/artifacts/jobs/a8e21843d413/thumbnails/page-17-thumb.jpg",
+          "image_url": "/artifacts/jobs/a8e21843d413/pages/page-17.png",
+          "sharpness_score": 0.7016304101448393,
+          "segment_start": 21.989333333333335,
+          "segment_end": 22.462222222222223,
+          "source_frame_index": 658,
+          "source_timestamp": 22.22577777777778,
+          "manual": false,
+          "rotation": 0,
+          "status": "deleted",
+          "deleted": true,
+          "source_image_url": "/artifacts/jobs/a8e21843d413/source-pages/page-17-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": "Contents ix Advanced Tactics How to Go from Being Merely Good to Being Truly Great 18 The Truth About Talent (When Genes Matter and When They Don\u2019t) 27 19 The Rule; How to Stay Motivated in Life and Work 229 20 The Downside of Creating Good Habits 239\n\nConclusion: The Secret to Results That Last 251\n\nAppendix What Should You Read Next? 257 Little Lessons from the Four Laws 259 How to Apply These Ideas to Business 265 How to Apply These Ideas to Parenting 267 Acknowledgments 269 Notes 273 index 299",
+          "ocr_blocks": [
+            {
+              "text": "Contents ix",
+              "confidence": 90.0,
+              "top": 297,
+              "left": 1450
+            },
+            {
+              "text": "Advanced Tactics",
+              "confidence": 95.5,
+              "top": 406,
+              "left": 704
+            },
+            {
+              "text": "How to Go from Being Merely",
+              "confidence": 95.33333333333333,
+              "top": 463,
+              "left": 552
+            },
+            {
+              "text": "Good to Being Truly Great",
+              "confidence": 95.6,
+              "top": 522,
+              "left": 594
+            },
+            {
+              "text": "18 The Truth About Talent",
+              "confidence": 94.2,
+              "top": 651,
+              "left": 193
+            },
+            {
+              "text": "(When Genes Matter and When They Don\u2019t) 27",
+              "confidence": 87.375,
+              "top": 716,
+              "left": 271
+            },
+            {
+              "text": "19 The Rule; How to Stay Motivated",
+              "confidence": 81.125,
+              "top": 823,
+              "left": 178
+            },
+            {
+              "text": "in Life and Work 229",
+              "confidence": 93.8,
+              "top": 892,
+              "left": 260
+            },
+            {
+              "text": "20 The Downside of Creating Good Habits 239",
+              "confidence": 94.625,
+              "top": 1002,
+              "left": 148
+            },
+            {
+              "text": "Conclusion: The Secret to Results That Last 251",
+              "confidence": 87.875,
+              "top": 1254,
+              "left": 241
+            },
+            {
+              "text": "Appendix",
+              "confidence": 95.0,
+              "top": 1463,
+              "left": 779
+            },
+            {
+              "text": "What Should You Read Next? 257",
+              "confidence": 94.66666666666667,
+              "top": 1538,
+              "left": 226
+            },
+            {
+              "text": "Little Lessons from the Four Laws 259",
+              "confidence": 91.42857142857143,
+              "top": 1613,
+              "left": 220
+            },
+            {
+              "text": "How to Apply These Ideas to Business 265",
+              "confidence": 94.0,
+              "top": 1689,
+              "left": 214
+            },
+            {
+              "text": "How to Apply These Ideas to Parenting 267",
+              "confidence": 95.125,
+              "top": 1767,
+              "left": 208
+            },
+            {
+              "text": "Acknowledgments 269",
+              "confidence": 95.0,
+              "top": 1840,
+              "left": 202
+            },
+            {
+              "text": "Notes 273",
+              "confidence": 96.0,
+              "top": 1908,
+              "left": 198
+            },
+            {
+              "text": "index 299",
+              "confidence": 91.0,
+              "top": 2003,
+              "left": 193
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        },
+        {
+          "id": "page-19",
+          "job_id": "a8e21843d413",
+          "order_index": 16,
+          "page_number": 17,
+          "preview_label": "Page 17",
+          "thumbnail_url": "/artifacts/jobs/a8e21843d413/thumbnails/page-19-thumb.jpg",
+          "image_url": "/artifacts/jobs/a8e21843d413/pages/page-19.png",
+          "sharpness_score": 1.2012610788935307,
+          "segment_start": 25.772444444444446,
+          "segment_end": 29.319111111111113,
+          "source_frame_index": 826,
+          "source_timestamp": 27.900444444444446,
+          "manual": false,
+          "rotation": 0,
+          "status": "active",
+          "deleted": false,
+          "source_image_url": "/artifacts/jobs/a8e21843d413/source-pages/page-19-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": "coo \u201cOr al as\n\nIntroduction\n\nMy Story\n\nO THE FINAL day of my sophomore year of high school, I was hit in the face with a baseball bat. As my classmate took a full swing, the bat slipped out of his hands and came flying toward me before striking me directly between the eyes. I have no memory of the mo- ment of impact. The bat smashed into my face with such force that it crushed my nose into a distorted U-shape. The collision sent the soft tissue of my brain slamming into the inside of my skull. Immediately, a wave of swelling surged throughout my head. In a fraction of a second, Lhad a broken nose, multiple skull fractures, anid two shattered eye sockets. When I opened my eyes, 1 saw people staring at me and running over to help. I looked down and noticed spots of red on my clothes. One of my classmates took the shirt off his back and handed it to me. I used it to plug the stream of blood rushing from my broken nose. Shocked and confused, I was unaware of how seriously I had been injured. My teacher looped his arm around my shoulder and began the long walk to the nurse\u2019s office: across the field, down the hill, and back",
+          "ocr_blocks": [
+            {
+              "text": "coo \u201cOr al as",
+              "confidence": 32.0,
+              "top": 159,
+              "left": 368
+            },
+            {
+              "text": "Introduction",
+              "confidence": 93.0,
+              "top": 807,
+              "left": 708
+            },
+            {
+              "text": "My Story",
+              "confidence": 67.0,
+              "top": 1058,
+              "left": 656
+            },
+            {
+              "text": "O THE FINAL day of my sophomore year of high school, I was hit",
+              "confidence": 94.2,
+              "top": 1410,
+              "left": 149
+            },
+            {
+              "text": "in the face with a baseball bat. As my classmate took a full swing,",
+              "confidence": 92.42857142857143,
+              "top": 1493,
+              "left": 295
+            },
+            {
+              "text": "the bat slipped out of his hands and came flying toward me before",
+              "confidence": 95.84615384615384,
+              "top": 1576,
+              "left": 145
+            },
+            {
+              "text": "striking me directly between the eyes. I have no memory of the mo-",
+              "confidence": 94.0,
+              "top": 1660,
+              "left": 138
+            },
+            {
+              "text": "ment of impact.",
+              "confidence": 96.0,
+              "top": 1752,
+              "left": 133
+            },
+            {
+              "text": "The bat smashed into my face with such force that it crushed my",
+              "confidence": 96.0,
+              "top": 1831,
+              "left": 202
+            },
+            {
+              "text": "nose into a distorted U-shape. The collision sent the soft tissue of my",
+              "confidence": 95.84615384615384,
+              "top": 1917,
+              "left": 123
+            },
+            {
+              "text": "brain slamming into the inside of my skull. Immediately, a wave of",
+              "confidence": 95.91666666666667,
+              "top": 2004,
+              "left": 116
+            },
+            {
+              "text": "swelling surged throughout my head. In a fraction of a second, Lhad a",
+              "confidence": 87.15384615384616,
+              "top": 2093,
+              "left": 109
+            },
+            {
+              "text": "broken nose, multiple skull fractures, anid two shattered eye sockets.",
+              "confidence": 94.0,
+              "top": 2184,
+              "left": 103
+            },
+            {
+              "text": "When I opened my eyes, 1 saw people staring at me and running",
+              "confidence": 93.76923076923077,
+              "top": 2275,
+              "left": 176
+            },
+            {
+              "text": "over to help. I looked down and noticed spots of red on my clothes.",
+              "confidence": 94.78571428571429,
+              "top": 2355,
+              "left": 90
+            },
+            {
+              "text": "One of my classmates took the shirt off his back and handed it to me. I",
+              "confidence": 93.8125,
+              "top": 2448,
+              "left": 84
+            },
+            {
+              "text": "used it to plug the stream of blood rushing from my broken nose.",
+              "confidence": 95.76923076923077,
+              "top": 2557,
+              "left": 80
+            },
+            {
+              "text": "Shocked and confused, I was unaware of how seriously I had been",
+              "confidence": 95.91666666666667,
+              "top": 2651,
+              "left": 72
+            },
+            {
+              "text": "injured.",
+              "confidence": 95.0,
+              "top": 2763,
+              "left": 70
+            },
+            {
+              "text": "My teacher looped his arm around my shoulder and began the",
+              "confidence": 96.0,
+              "top": 2844,
+              "left": 143
+            },
+            {
+              "text": "long walk to the nurse\u2019s office: across the field, down the hill, and back",
+              "confidence": 95.0,
+              "top": 2941,
+              "left": 58
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        },
+        {
+          "id": "page-20",
+          "job_id": "a8e21843d413",
+          "order_index": 17,
+          "page_number": 18,
+          "preview_label": "Page 18",
+          "thumbnail_url": "/artifacts/jobs/a8e21843d413/thumbnails/page-20-thumb.jpg",
+          "image_url": "/artifacts/jobs/a8e21843d413/pages/page-20.png",
+          "sharpness_score": 0.3670368995410761,
+          "segment_start": 29.555555555555557,
+          "segment_end": 30.26488888888889,
+          "source_frame_index": 882,
+          "source_timestamp": 29.792,
+          "manual": false,
+          "rotation": 0,
+          "status": "deleted",
+          "deleted": true,
+          "source_image_url": "/artifacts/jobs/a8e21843d413/source-pages/page-20-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": ". . ne Ooo OT - eS 2 . a . RTS, ad re me - i a sm - ape - ce _o = a ae . - a . eel . - .\n\no--",
+          "ocr_blocks": [
+            {
+              "text": ". . ne Ooo OT - eS 2 . a . RTS, ad re me - i a sm - ape - ce _o = a ae . - a . eel . - .",
+              "confidence": 70.0,
+              "top": 0,
+              "left": 0
+            },
+            {
+              "text": "o--",
+              "confidence": 70.0,
+              "top": 30,
+              "left": 0
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        },
+        {
+          "id": "page-21",
+          "job_id": "a8e21843d413",
+          "order_index": 18,
+          "page_number": 19,
+          "preview_label": "Page 19",
+          "thumbnail_url": "/artifacts/jobs/a8e21843d413/thumbnails/page-21-thumb.jpg",
+          "image_url": "/artifacts/jobs/a8e21843d413/pages/page-21.png",
+          "sharpness_score": 1.4994185844539953,
+          "segment_start": 30.501333333333335,
+          "segment_end": 32.629333333333335,
+          "source_frame_index": 931,
+          "source_timestamp": 31.447111111111113,
+          "manual": false,
+          "rotation": 0,
+          "status": "active",
+          "deleted": false,
+          "source_image_url": "/artifacts/jobs/a8e21843d413/source-pages/page-21-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": "- Aare na wm ean\n\n2) ATOMIC HABITS ads touched my sides, holding me uprighy 5 school. Random ha ed slowly. Nobody realized that every Ming and walk took our Um) mattered. ved at the nurse\u2019s office, she asked me a series When arti questions. ~what year is it?\u201d \u00ab1998,\" answered. It was actually 2002. \u201cwho is the president of the United States?\u201d Clinton,\u201d I said. The correct answer was George Bush. \u201cWhat.is your mom's name?\u201d \u201cUh. Um.\" I stalled. Ten seconds passed. \u201cpatti,\u201d said casually, ignoring the fact that it had taken me ten seconds to remember my own mother\u2019s name. \u2018That is the last question I remember. My body was unable to handle the rapid swelling in my brain and I'lost consciousness before the am_ bulance arrived. Minutes later, 1 was carried out of school and taken tg the local hospital. Shortly after arriving, my body began shutting down: I strugoled with basic functions like swallowing and breathing. I had my first sei. zure of the day, Then stopped breathing entirely. As the doctors hur ried a supply me with oxygen, they alsu decided the local hospital was unequipped to handle the situation and ordered a helicopter to fly (o a larger hospital in Cincinnati. 2 was rolled out of the emergency room doors and toward the helj pad across the street. The stretcher rattled on a bumpy sidewalk a nurse pushed me along while another pumped each breath a iy hand. My mother who ; ad arrived at th ore, climbed into the helicopter beside me 3 ae and unable to breathe o remained unconscious light i My Own as she held my hand during the\n\nSi regular",
+          "ocr_blocks": [
+            {
+              "text": "-",
+              "confidence": 40.0,
+              "top": 126,
+              "left": 556
+            },
+            {
+              "text": "Aare na wm ean",
+              "confidence": 35.666666666666664,
+              "top": 145,
+              "left": 824
+            },
+            {
+              "text": "2) ATOMIC HABITS",
+              "confidence": 56.333333333333336,
+              "top": 344,
+              "left": 352
+            },
+            {
+              "text": "ads touched my sides, holding me uprighy",
+              "confidence": 77.625,
+              "top": 428,
+              "left": 848
+            },
+            {
+              "text": "5 school. Random ha",
+              "confidence": 82.75,
+              "top": 461,
+              "left": 408
+            },
+            {
+              "text": "ed slowly. Nobody realized that every Ming",
+              "confidence": 89.71428571428571,
+              "top": 486,
+              "left": 846
+            },
+            {
+              "text": "and walk",
+              "confidence": 86.0,
+              "top": 534,
+              "left": 603
+            },
+            {
+              "text": "took our Um)",
+              "confidence": 82.0,
+              "top": 567,
+              "left": 331
+            },
+            {
+              "text": "mattered.",
+              "confidence": 60.0,
+              "top": 637,
+              "left": 327
+            },
+            {
+              "text": "ved at the nurse\u2019s office, she asked me a series",
+              "confidence": 91.5,
+              "top": 658,
+              "left": 700
+            },
+            {
+              "text": "When arti",
+              "confidence": 89.33333333333333,
+              "top": 700,
+              "left": 389
+            },
+            {
+              "text": "questions.",
+              "confidence": 95.0,
+              "top": 801,
+              "left": 314
+            },
+            {
+              "text": "~what year is it?\u201d",
+              "confidence": 83.5,
+              "top": 848,
+              "left": 377
+            },
+            {
+              "text": "\u00ab1998,\" answered. It was actually 2002.",
+              "confidence": 79.71428571428571,
+              "top": 906,
+              "left": 371
+            },
+            {
+              "text": "\u201cwho is the president of the United States?\u201d",
+              "confidence": 93.0,
+              "top": 983,
+              "left": 367
+            },
+            {
+              "text": "Clinton,\u201d I said. The correct answer was George Bush.",
+              "confidence": 83.63636363636364,
+              "top": 1067,
+              "left": 360
+            },
+            {
+              "text": "\u201cWhat.is your mom's name?\u201d",
+              "confidence": 78.5,
+              "top": 1162,
+              "left": 355
+            },
+            {
+              "text": "\u201cUh. Um.\" I stalled. Ten seconds passed.",
+              "confidence": 81.28571428571429,
+              "top": 1238,
+              "left": 351
+            },
+            {
+              "text": "\u201cpatti,\u201d said casually, ignoring the fact that it had taken me ten",
+              "confidence": 90.61538461538461,
+              "top": 1321,
+              "left": 343
+            },
+            {
+              "text": "seconds to remember my own mother\u2019s name.",
+              "confidence": 91.57142857142857,
+              "top": 1413,
+              "left": 268
+            },
+            {
+              "text": "\u2018That is the last question I remember. My body was unable to handle",
+              "confidence": 91.38461538461539,
+              "top": 1496,
+              "left": 330
+            },
+            {
+              "text": "the rapid swelling in my brain and I'lost consciousness before the am_",
+              "confidence": 90.91666666666667,
+              "top": 1584,
+              "left": 255
+            },
+            {
+              "text": "bulance arrived. Minutes later, 1 was carried out of school and taken tg",
+              "confidence": 77.15384615384616,
+              "top": 1672,
+              "left": 248
+            },
+            {
+              "text": "the local hospital.",
+              "confidence": 94.33333333333333,
+              "top": 1765,
+              "left": 241
+            },
+            {
+              "text": "Shortly after arriving, my body began shutting down: I strugoled",
+              "confidence": 89.1,
+              "top": 1852,
+              "left": 302
+            },
+            {
+              "text": "with basic functions like swallowing and breathing. I had my first sei.",
+              "confidence": 88.41666666666667,
+              "top": 1940,
+              "left": 227
+            },
+            {
+              "text": "zure of the day, Then stopped breathing entirely. As the doctors hur",
+              "confidence": 90.76923076923077,
+              "top": 2027,
+              "left": 217
+            },
+            {
+              "text": "ried a supply me with oxygen, they alsu decided the local hospital was",
+              "confidence": 90.92307692307692,
+              "top": 2118,
+              "left": 211
+            },
+            {
+              "text": "unequipped to handle the situation and ordered a helicopter to fly",
+              "confidence": 94.08333333333333,
+              "top": 2210,
+              "left": 204
+            },
+            {
+              "text": "(o a larger hospital in Cincinnati. 2",
+              "confidence": 88.0,
+              "top": 2255,
+              "left": 197
+            },
+            {
+              "text": "was rolled out of the emergency room doors and toward the helj",
+              "confidence": 89.92307692307692,
+              "top": 2393,
+              "left": 262
+            },
+            {
+              "text": "pad across the street. The stretcher rattled on a bumpy sidewalk a",
+              "confidence": 87.91666666666667,
+              "top": 2482,
+              "left": 178
+            },
+            {
+              "text": "nurse pushed me along while another pumped each breath a iy",
+              "confidence": 86.58333333333333,
+              "top": 2564,
+              "left": 174
+            },
+            {
+              "text": "hand. My mother who",
+              "confidence": 90.6,
+              "top": 2667,
+              "left": 167
+            },
+            {
+              "text": "; ad arrived at th",
+              "confidence": 82.8,
+              "top": 2700,
+              "left": 589
+            },
+            {
+              "text": "ore, climbed into the helicopter beside me 3 ae",
+              "confidence": 69.7,
+              "top": 2748,
+              "left": 178
+            },
+            {
+              "text": "and unable to breathe o remained unconscious",
+              "confidence": 81.25,
+              "top": 2851,
+              "left": 157
+            },
+            {
+              "text": "light i My Own as she held my hand during the",
+              "confidence": 84.0909090909091,
+              "top": 2890,
+              "left": 154
+            },
+            {
+              "text": "Si regular",
+              "confidence": 43.0,
+              "top": 3093,
+              "left": 354
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        },
+        {
+          "id": "page-22",
+          "job_id": "a8e21843d413",
+          "order_index": 19,
+          "page_number": 20,
+          "preview_label": "Page 20",
+          "thumbnail_url": "/artifacts/jobs/a8e21843d413/thumbnails/page-22-thumb.jpg",
+          "image_url": "/artifacts/jobs/a8e21843d413/pages/page-22.png",
+          "sharpness_score": 1.532277017761274,
+          "segment_start": 32.86577777777778,
+          "segment_end": 35.46666666666667,
+          "source_frame_index": 1015,
+          "source_timestamp": 34.284444444444446,
+          "manual": false,
+          "rotation": 0,
+          "status": "active",
+          "deleted": false,
+          "source_image_url": "/artifacts/jobs/a8e21843d413/source-pages/page-22-source.png",
+          "edits": {
+            "rotation": 0,
+            "crop": null,
+            "strokes": [],
+            "texts": [],
+            "blur_regions": []
+          },
+          "ocr_text": "introduction While my mother rode with me in the helicopter, my father went home to check on my brother and sister and break the news to them, He choked back tears as he explained to my sister that he would miss her eighth-grade graduation ceremony that night. After passing my siblings off to family and friends, he drove to Cincinnati to meet my mother. When my mom and I landed on the roof of the hospital, a team of nearly twenty doctors.and nurses sprinted onto the helipad and wheeled me into the trauma unit. By this time, the swelling in my brain had become so severe that I was having repeated post-traumatic seizures. My broken bones needed to be fixed, but I was in no condition to un- dergo surgery. After yet another seizure\u2014my third of the day\u2014I was put into a medically induced coma and a ventilator. My parents were no strangers to this hospital. Ten years earlier, they had entered the same building on the ground floor after my sister was diagnosed with leukemia at age three. was five at the time, My brother was just six months old. After two and a half years of chemotherapy treatments, spinal taps, and bone marrow biopsies, my little sister fi- nally walked out of the hospital happy, healthy, and cancer free. And now, after ten years of normal life, my parents found themselves Deck in the same place with a different child. While I slipped into a coma, the hospital! sent a priest and a social worker to comfort my parents. It was the same priest who had met with them a decade earlier on the evening they found out my-sister had Cancer. As day faded into night, a series of machines kept me alive. My par- ents slept restlessly on a hospital mattress\u2014one moment they would collapse from fatigue, the next they would be wide awake with worry. My mother would tell me later, \u201cIt was one of the worst nights I've ever had.\u201d",
+          "ocr_blocks": [
+            {
+              "text": "introduction",
+              "confidence": 76.66666666666667,
+              "top": 341,
+              "left": 1392
+            },
+            {
+              "text": "While my mother rode with me in the helicopter, my father went",
+              "confidence": 95.83333333333333,
+              "top": 451,
+              "left": 316
+            },
+            {
+              "text": "home to check on my brother and sister and break the news to them,",
+              "confidence": 94.28571428571429,
+              "top": 523,
+              "left": 243
+            },
+            {
+              "text": "He choked back tears as he explained to my sister that he would miss",
+              "confidence": 95.78571428571429,
+              "top": 593,
+              "left": 240
+            },
+            {
+              "text": "her eighth-grade graduation ceremony that night. After passing my",
+              "confidence": 95.88888888888889,
+              "top": 668,
+              "left": 232
+            },
+            {
+              "text": "siblings off to family and friends, he drove to Cincinnati to meet my",
+              "confidence": 95.46153846153847,
+              "top": 742,
+              "left": 226
+            },
+            {
+              "text": "mother.",
+              "confidence": 96.0,
+              "top": 829,
+              "left": 223
+            },
+            {
+              "text": "When my mom and I landed on the roof of the hospital, a team of",
+              "confidence": 95.4,
+              "top": 892,
+              "left": 288
+            },
+            {
+              "text": "nearly twenty doctors.and nurses sprinted onto the helipad and wheeled",
+              "confidence": 95.0,
+              "top": 974,
+              "left": 212
+            },
+            {
+              "text": "me into the trauma unit. By this time, the swelling in my brain had",
+              "confidence": 95.78571428571429,
+              "top": 1053,
+              "left": 207
+            },
+            {
+              "text": "become so severe that I was having repeated post-traumatic seizures.",
+              "confidence": 95.6,
+              "top": 1133,
+              "left": 203
+            },
+            {
+              "text": "My broken bones needed to be fixed, but I was in no condition to un-",
+              "confidence": 92.2,
+              "top": 1214,
+              "left": 199
+            },
+            {
+              "text": "dergo surgery. After yet another seizure\u2014my third of the day\u2014I was",
+              "confidence": 89.0909090909091,
+              "top": 1296,
+              "left": 192
+            },
+            {
+              "text": "put into a medically induced coma and a ventilator.",
+              "confidence": 86.3,
+              "top": 1374,
+              "left": 187
+            },
+            {
+              "text": "My parents were no strangers to this hospital. Ten years earlier, they",
+              "confidence": 86.33333333333333,
+              "top": 1463,
+              "left": 257
+            },
+            {
+              "text": "had entered the same building on the ground floor after my sister was",
+              "confidence": 95.84615384615384,
+              "top": 1546,
+              "left": 178
+            },
+            {
+              "text": "diagnosed with leukemia at age three. was five at the time, My brother",
+              "confidence": 88.28571428571429,
+              "top": 1631,
+              "left": 171
+            },
+            {
+              "text": "was just six months old. After two and a half years of chemotherapy",
+              "confidence": 94.23076923076923,
+              "top": 1717,
+              "left": 167
+            },
+            {
+              "text": "treatments, spinal taps, and bone marrow biopsies, my little sister fi-",
+              "confidence": 93.9090909090909,
+              "top": 1804,
+              "left": 161
+            },
+            {
+              "text": "nally walked out of the hospital happy, healthy, and cancer free. And",
+              "confidence": 94.41666666666667,
+              "top": 1891,
+              "left": 154
+            },
+            {
+              "text": "now, after ten years of normal life, my parents found themselves Deck",
+              "confidence": 92.08333333333333,
+              "top": 1981,
+              "left": 148
+            },
+            {
+              "text": "in the same place with a different child.",
+              "confidence": 95.5,
+              "top": 2071,
+              "left": 142
+            },
+            {
+              "text": "While I slipped into a coma, the hospital! sent a priest and a social",
+              "confidence": 90.92857142857143,
+              "top": 2163,
+              "left": 212
+            },
+            {
+              "text": "worker to comfort my parents. It was the same priest who had met",
+              "confidence": 95.92307692307692,
+              "top": 2258,
+              "left": 127
+            },
+            {
+              "text": "with them a decade earlier on the evening they found out my-sister had",
+              "confidence": 92.3076923076923,
+              "top": 2352,
+              "left": 121
+            },
+            {
+              "text": "Cancer.",
+              "confidence": 65.0,
+              "top": 2467,
+              "left": 111
+            },
+            {
+              "text": "As day faded into night, a series of machines kept me alive. My par-",
+              "confidence": 94.14285714285714,
+              "top": 2546,
+              "left": 182
+            },
+            {
+              "text": "ents slept restlessly on a hospital mattress\u2014one moment they would",
+              "confidence": 94.5,
+              "top": 2645,
+              "left": 98
+            },
+            {
+              "text": "collapse from fatigue, the next they would be wide awake with worry.",
+              "confidence": 93.25,
+              "top": 2745,
+              "left": 92
+            },
+            {
+              "text": "My mother would tell me later, \u201cIt was one of the worst nights I've",
+              "confidence": 95.14285714285714,
+              "top": 2847,
+              "left": 88
+            },
+            {
+              "text": "ever had.\u201d",
+              "confidence": 94.0,
+              "top": 2948,
+              "left": 79
+            }
+          ],
+          "ocr_status": "ready",
+          "ocr_error": null
+        }
+      ],
+      "export": {
+        "status": "idle",
+        "progress_percent": 0,
+        "filename": null,
+        "download_url": null,
+        "requested_at": null,
+        "completed_at": null,
+        "error": null
+      },
+      "text_export": {
+        "status": "ready",
+        "progress_percent": 100,
+        "filename": "a8e21843d413-text.pdf",
+        "download_url": "/artifacts/exports/a8e21843d413-text.pdf",
+        "requested_at": "2026-07-10T17:59:01.698363+00:00",
+        "completed_at": "2026-07-10T17:59:08.530717+00:00",
+        "error": null
+      },
+      "upload_path": "backend\\data\\uploads\\a8e21843d413-WhatsApp Video 2026-03-27 at 10.56.04 PM.mp4"
     }
   ]
 }

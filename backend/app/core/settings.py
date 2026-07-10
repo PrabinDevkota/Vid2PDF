@@ -57,10 +57,21 @@ class Settings(BaseModel):
     ocr_soft_confidence: float = 22.0
     ocr_psm: int = 6
     ocr_psm_fallback: int = 4
-    ocr_psm_candidates: list[int] = [6, 4, 3]
+    # Primary PSM only; fallbacks run only when the first pass scores poorly.
+    ocr_psm_candidates: list[int] = [6]
+    ocr_psm_fallback_candidates: list[int] = [4, 3]
     ocr_oem: int = 3
-    ocr_upscale_min_width: int = 2000
+    # 1400px is enough for LSTM OCR and much faster than 2000px upscales.
+    ocr_upscale_min_width: int = 1400
     ocr_preprocess_enabled: bool = True
+    ocr_deskew_enabled: bool = True
+    ocr_denoise_enabled: bool = False
+    # Accept first-pass OCR when score is good enough (skips extra variants/PSMs).
+    ocr_fast_accept_score: float = 52.0
+    # Parallel page OCR workers; 0 = auto (min(4, cpu_count)).
+    ocr_workers: int = 0
+    # Visual dedupe should not run Tesseract; post-OCR collapse handles text dupes.
+    ocr_dedupe_use_tesseract: bool = False
     ocr_min_plausible_ratio: float = 0.42
     ocr_consecutive_duplicate_similarity: float = 0.85
     ocr_global_duplicate_similarity: float = 0.88
