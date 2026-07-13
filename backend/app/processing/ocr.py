@@ -318,30 +318,46 @@ def is_plausible_page_text(text: str) -> bool:
     return vowel_ratio >= 0.18
 
 
+# Common words that two unrelated prose pages naturally share; excluded so
+# token overlap reflects page-specific vocabulary (names, terms, numbers).
+_OCR_STOPWORDS = frozenset(
+    """
+    about after again also because been before being between both could does
+    down during each every from have here into just like made make many more
+    most much must only other others over page pages same should some such
+    than that their them then there these they this those through under upon
+    very were what when where which while will with within without would your
+    """.split()
+)
+
+
 def _distinctive_tokens(text: str) -> set[str]:
-    """Tokens that survive OCR garbling: real words (>=4 chars) and numbers."""
-    tokens: set[str] = set()
-    for token in re.findall(r"[a-z]{4,}|\d+", text.lower()):
-        tokens.add(token)
-    return tokens
+    """Tokens that survive OCR garbling: page-specific words (>=4 chars) and numbers."""
+    return {
+        token
+        for token in re.findall(r"[a-z]{4,}|\d+", text.lower())
+        if token not in _OCR_STOPWORDS
+    }
 
 
 def token_set_similarity(left: str, right: str) -> float:
-    """Jaccard overlap of distinctive tokens; robust to garbled duplicates."""
+    """
+    Containment of distinctive tokens (overlap / smaller set).
+
+    Robust to garbled duplicates: OCR noise destroys character-level
+    similarity, but the page-specific words and numbers still overlap.
+    """
     left_tokens = _distinctive_tokens(left)
     right_tokens = _distinctive_tokens(right)
     if not left_tokens or not right_tokens:
         return 0.0
     overlap = len(left_tokens & right_tokens)
-    union = len(left_tokens | right_tokens)
-    return overlap / union
+    return overlap / min(len(left_tokens), len(right_tokens))
 
 
 def _is_duplicate_ocr_text(left: str, right: str, sequence_limit: float) -> bool:
     if text_similarity(left, right) >= sequence_limit:
         return True
-    # Garbled duplicates: character-level similarity collapses under OCR noise,
-    # but the distinctive words/numbers of the same page still overlap heavily.
     left_tokens = _distinctive_tokens(left)
     right_tokens = _distinctive_tokens(right)
     if (
@@ -349,7 +365,7 @@ def _is_duplicate_ocr_text(left: str, right: str, sequence_limit: float) -> bool
         or len(right_tokens) < settings.ocr_duplicate_min_distinctive_tokens
     ):
         return False
-    overlap = len(left_tokens & right_tokens) / len(left_tokens | right_tokens)
+    overlap = len(left_tokens & right_tokens) / min(len(left_tokens), len(right_tokens))
     return overlap >= settings.ocr_duplicate_token_overlap
 
 
