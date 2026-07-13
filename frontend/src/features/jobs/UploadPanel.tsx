@@ -71,12 +71,11 @@ export function UploadPanel({ onJobCreated, compact }: UploadPanelProps) {
 
   return (
     <SectionCard
-      eyebrow="Input"
-      title={compact ? "New session" : "Create a reconstruction session"}
+      title="New session"
       subtitle={
         compact
           ? "Upload a recording to start a new session."
-          : "Upload one recording, choose the source type, and let the pipeline prepare reviewable pages."
+          : "Upload one recording and choose how it was captured."
       }
     >
       <form className="upload-form" onSubmit={handleSubmit}>
@@ -142,15 +141,13 @@ export function UploadPanel({ onJobCreated, compact }: UploadPanelProps) {
               <strong>Creating session…</strong>
             </div>
           ) : null}
-          <Upload size={28} className="upload-dropzone__lucide" aria-hidden="true" />
-          <span className="upload-dropzone__eyebrow">Video input</span>
-          <strong>Drop a video here or click to browse</strong>
-          <p>
+          <Upload size={24} className="upload-dropzone__lucide" aria-hidden="true" />
+          <strong>Drop a video or click to browse</strong>
+          <span className="upload-dropzone__hint">
             {processingMode === "camera"
-              ? "Best for physical pages with perspective correction."
-              : "Best for clean digital page recordings."}
-          </p>
-          <span className="upload-dropzone__hint">MP4, MOV, WebM · One source per session</span>
+              ? "Handheld recordings of physical pages · MP4, MOV, WebM"
+              : "Screen recordings of digital documents · MP4, MOV, WebM"}
+          </span>
         </div>
 
         {selectedFile ? (
@@ -194,13 +191,6 @@ export function UploadPanel({ onJobCreated, compact }: UploadPanelProps) {
               "Start reconstruction"
             )}
           </button>
-          {!compact ? (
-            <span className="upload-actions__hint">
-              {processingMode === "camera"
-                ? "Camera mode handles handheld recordings with page boundaries."
-                : "Screen mode is optimized for page-by-page digital recordings."}
-            </span>
-          ) : null}
         </div>
       </form>
     </SectionCard>

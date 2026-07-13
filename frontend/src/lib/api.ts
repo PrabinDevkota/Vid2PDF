@@ -103,6 +103,18 @@ export async function addManualPage(
   return readJson<ProcessingJob>(response, "Failed to add page from video");
 }
 
+export async function deleteJob(jobId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const detail =
+      payload && typeof payload.detail === "string" ? payload.detail : "Failed to delete session";
+    throw new Error(detail);
+  }
+}
+
 export async function startExport(jobId: string): Promise<ProcessingJob["export"]> {
   const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/export`, {
     method: "POST",

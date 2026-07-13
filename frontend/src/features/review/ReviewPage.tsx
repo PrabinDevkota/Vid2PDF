@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Download, FileText, Loader2 } from "lucide-react";
+import { Download, FileCode2, FileText, Loader2 } from "lucide-react";
 import { AppHeader } from "../../components/AppHeader";
 import { WorkflowStepper } from "../../components/WorkflowStepper";
 import { useToast } from "../../components/Toast";
@@ -59,7 +59,7 @@ export function ReviewPage() {
       toast(
         textExport.status === "ready"
           ? "Text PDF is ready to download."
-          : "Text PDF export started — OCR + LaTeX compile.",
+          : "Text PDF export started.",
         "success",
       );
     } catch (error) {
@@ -78,7 +78,7 @@ export function ReviewPage() {
           <strong>No session selected</strong>
           <p>Choose a session from the dashboard or upload a new video to begin.</p>
           <Link className="primary-button" to="/">
-            Back to dashboard
+            Back to sessions
           </Link>
         </div>
       </main>
@@ -90,12 +90,14 @@ export function ReviewPage() {
     progressPercent: 0,
     filename: null,
     downloadUrl: null,
+    texUrl: null,
     requestedAt: null,
     completedAt: null,
     error: null,
   };
   const exportDownloadUrl = resolveArtifactUrl(activeJob.export.downloadUrl);
   const textExportDownloadUrl = resolveArtifactUrl(textExport.downloadUrl);
+  const texSourceUrl = resolveArtifactUrl(textExport.texUrl ?? null);
   const canExport =
     activeJob.status === "ready" &&
     activeJob.export.status !== "processing" &&
@@ -121,7 +123,7 @@ export function ReviewPage() {
                 target="_blank"
                 rel="noreferrer"
               >
-                <Download size={16} aria-hidden="true" />
+                <Download size={15} aria-hidden="true" />
                 Image PDF
               </a>
             ) : null}
@@ -132,8 +134,20 @@ export function ReviewPage() {
                 target="_blank"
                 rel="noreferrer"
               >
-                <FileText size={16} aria-hidden="true" />
+                <FileText size={15} aria-hidden="true" />
                 Text PDF
+              </a>
+            ) : null}
+            {texSourceUrl ? (
+              <a
+                className="secondary-button"
+                href={texSourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                title="Download the LaTeX source of the text PDF"
+              >
+                <FileCode2 size={15} aria-hidden="true" />
+                .tex
               </a>
             ) : null}
             <button
@@ -144,14 +158,11 @@ export function ReviewPage() {
             >
               {isTextExporting || textExport.status === "processing" ? (
                 <>
-                  <Loader2 size={16} className="spin" aria-hidden="true" />
-                  Text PDF…
+                  <Loader2 size={15} className="spin" aria-hidden="true" />
+                  Exporting…
                 </>
               ) : (
-                <>
-                  <FileText size={16} aria-hidden="true" />
-                  Export Text PDF
-                </>
+                "Export text PDF"
               )}
             </button>
             <button
@@ -162,11 +173,11 @@ export function ReviewPage() {
             >
               {isExporting || activeJob.export.status === "processing" ? (
                 <>
-                  <Loader2 size={16} className="spin" aria-hidden="true" />
+                  <Loader2 size={15} className="spin" aria-hidden="true" />
                   Exporting…
                 </>
               ) : (
-                "Export Image PDF"
+                "Export image PDF"
               )}
             </button>
           </div>
@@ -174,14 +185,14 @@ export function ReviewPage() {
       />
 
       {loadError ? (
-        <div className="status-banner status-banner--error workspace-alert">
+        <div className="status-banner status-banner--error">
           <strong>Backend unavailable</strong>
           <span>{loadError}</span>
         </div>
       ) : null}
 
       {textExport.status === "failed" && textExport.error ? (
-        <div className="status-banner status-banner--error workspace-alert">
+        <div className="status-banner status-banner--error">
           <strong>Text PDF export failed</strong>
           <span>{textExport.error}</span>
         </div>

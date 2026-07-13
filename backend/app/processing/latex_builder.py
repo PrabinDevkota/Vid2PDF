@@ -79,6 +79,8 @@ def build_latex_document(
         rf"  {{\footnotesize\scshape\color{{{MUTED}}}page~#1}}\\[0.2em]",
         rf"  {{\color{{{RULE}}}\rule{{\linewidth}}{{0.5pt}}}}\par\vspace{{0.9em}}}}",
         r"\setlength{\parskip}{0.55em}",
+        # OCR text contains unbreakable junk tokens; stretch rather than overflow.
+        r"\setlength{\emergencystretch}{3em}",
         r"\justifying",
         r"\begin{document}",
         r"\thispagestyle{empty}",
@@ -89,7 +91,7 @@ def build_latex_document(
         parts.append(rf"{{\small\color{{{MUTED}}} Source: {subtitle}}}\\[0.25em]")
     parts.extend(
         [
-            rf"{{\small\color{{{MUTED}}} Extracted with Vid2PDF · {date.today():%B %d, %Y}}}\\[0.7em]",
+            rf"{{\small\color{{{MUTED}}} Extracted with Vid2PDF\;\textperiodcentered\; {date.today():%B %d, %Y}}}\\[0.7em]",
             rf"{{\color{{{ACCENT}}}\rule{{2.4cm}}{{2pt}}}}",
             r"\end{flushleft}",
             r"\vspace{1.4em}",
@@ -184,8 +186,20 @@ def _format_paragraphs(paragraphs: list[str]) -> str:
         if _looks_like_heading(text):
             parts.append(rf"\subsection*{{{escape_latex(text)}}}")
         else:
-            parts.append(rf"{escape_latex(text)}\par")
+            parts.append(rf"{_escape_body_text(text)}\par")
     return "\n\n".join(parts)
+
+
+def _escape_body_text(text: str) -> str:
+    """Escape body text, letting very long tokens (URLs, OCR junk) wrap."""
+    words: list[str] = []
+    for token in text.split(" "):
+        if len(token) > 24:
+            chunks = [escape_latex(token[i : i + 16]) for i in range(0, len(token), 16)]
+            words.append(r"\allowbreak{}".join(chunks))
+        else:
+            words.append(escape_latex(token))
+    return " ".join(words)
 
 
 def _looks_like_heading(text: str) -> bool:

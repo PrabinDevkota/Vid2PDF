@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Crop,
   EyeOff,
@@ -7,6 +7,7 @@ import {
   RotateCcw,
   RotateCw,
   Type,
+  X,
 } from "lucide-react";
 import { resolveArtifactUrl } from "../../lib/api";
 import type {
@@ -36,12 +37,19 @@ interface DragState {
 const MAX_CANVAS_WIDTH = 920;
 const MAX_CANVAS_HEIGHT = 640;
 
-const TOOL_CONFIG: { key: EditorTool; label: string; Icon: typeof Crop }[] = [
-  { key: "crop", label: "Crop", Icon: Crop },
-  { key: "draw", label: "Draw", Icon: Pencil },
-  { key: "text", label: "Text", Icon: Type },
-  { key: "blur", label: "Blur", Icon: EyeOff },
+const TOOL_CONFIG: { key: EditorTool; label: string; hint: string; Icon: typeof Crop }[] = [
+  { key: "crop", label: "Crop", hint: "Drag to select the area to keep.", Icon: Crop },
+  { key: "draw", label: "Draw", hint: "Draw freehand on the page.", Icon: Pencil },
+  { key: "text", label: "Text", hint: "Click on the page to place text.", Icon: Type },
+  { key: "blur", label: "Blur", hint: "Drag a rectangle over anything to hide.", Icon: EyeOff },
 ];
+
+const TOOL_CURSOR: Record<EditorTool, string> = {
+  crop: "crosshair",
+  blur: "crosshair",
+  draw: "crosshair",
+  text: "text",
+};
 
 export function PageEditorModal({
   page,
@@ -93,6 +101,25 @@ export function PageEditorModal({
     image.src = sourceUrl;
   }, [page]);
 
+  const handleClose = useCallback(() => {
+    if (!isSaving) {
+      onClose();
+    }
+  }, [isSaving, onClose]);
+
+  useEffect(() => {
+    if (!page) {
+      return;
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        handleClose();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [page, handleClose]);
+
   const workingSize = useMemo(() => {
     const image = imageRef.current;
     if (!image || !edits) {
@@ -135,7 +162,13 @@ export function PageEditorModal({
     return null;
   }
 
-  function resetAnnotationsForTransform(nextRotation: number, nextCrop: CropBox | null): PageEdits {
+  const activeTool = TOOL_CONFIG.find((item) => item.key === tool);
+  const hasAnnotations =
+    edits.strokes.length > 0 || edits.texts.length > 0 || edits.blurRegions.length > 0;
+
+  function transformEdits(nextRotation: number, nextCrop: CropBox | null): PageEdits {
+    // Rotation/crop change the coordinate space annotations were placed in,
+    // so they cannot be carried over.
     return {
       rotation: nextRotation,
       crop: nextCrop,
@@ -151,8 +184,12 @@ export function PageEditorModal({
       return null;
     }
     const rect = canvas.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / workingSize.scale;
-    const y = (event.clientY - rect.top) / workingSize.scale;
+    // Use the on-screen rect so coordinates stay correct even when CSS
+    // shrinks the canvas below its intrinsic width.
+    const displayScaleX = rect.width / Math.max(canvas.width, 1);
+    const displayScaleY = rect.height / Math.max(canvas.height, 1);
+    const x = (event.clientX - rect.left) / displayScaleX / workingSize.scale;
+    const y = (event.clientY - rect.top) / displayScaleY / workingSize.scale;
     const width = canvas.width / workingSize.scale;
     const height = canvas.height / workingSize.scale;
     return {
@@ -166,6 +203,7 @@ export function PageEditorModal({
     if (!point || !edits) {
       return;
     }
+    event.currentTarget.setPointerCapture(event.pointerId);
     if (tool === "draw") {
       setActiveStroke({ color: drawColor, width: drawWidth, points: [point] });
       return;
@@ -217,7 +255,10 @@ export function PageEditorModal({
     }
   }
 
-  function handlePointerUp() {
+  function handlePointerUp(event: React.PointerEvent<HTMLCanvasElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
     if (!edits) {
       return;
     }
@@ -235,7 +276,17 @@ export function PageEditorModal({
       const region = normalizeRegion(dragState.start, dragState.current);
       if (region.width > 8 && region.height > 8) {
         if (tool === "crop") {
-          setEdits(resetAnnotationsForTransform(edits.rotation, region));
+          // The drag happened in the coordinates of the currently cropped
+          // view; offset by the existing crop so crops compose correctly.
+          const offsetX = edits.crop?.x ?? 0;
+          const offsetY = edits.crop?.y ?? 0;
+          setEdits(
+            transformEdits(edits.rotation, {
+              ...region,
+              x: region.x + offsetX,
+              y: region.y + offsetY,
+            }),
+          );
         } else {
           const nextRegion: BlurRegion = { ...region, intensity: blurIntensity };
           setEdits({
@@ -248,6 +299,11 @@ export function PageEditorModal({
     }
   }
 
+  function handlePointerCancel() {
+    setActiveStroke(null);
+    setDragState(null);
+  }
+
   async function handleSave() {
     if (!edits) {
       return;
@@ -257,16 +313,23 @@ export function PageEditorModal({
 
   return (
     <div className="editor-modal">
-      <div className="editor-modal__backdrop" onClick={onClose} />
+      <div className="editor-modal__backdrop" onClick={handleClose} />
       <div className="editor-modal__panel" role="dialog" aria-modal="true" aria-label="Edit page">
         <div className="editor-modal__header">
           <div>
-            <span className="section-eyebrow">Page editor</span>
-            <h3>{page.previewLabel}</h3>
+            <h3>Edit {page.previewLabel.toLowerCase()}</h3>
             <p className="muted">
-              Rotate, crop, draw, place text, and blur sensitive areas.
+              {activeTool?.hint ?? "Rotate, crop, draw, place text, and blur sensitive areas."}
             </p>
           </div>
+          <button
+            className="editor-modal__close"
+            onClick={handleClose}
+            type="button"
+            aria-label="Close editor"
+          >
+            <X size={18} />
+          </button>
         </div>
 
         <div className="editor-modal__body">
@@ -287,13 +350,11 @@ export function PageEditorModal({
             </div>
 
             <div className="editor-control-group">
-              <span className="section-eyebrow">Rotate</span>
+              <span className="editor-group-label">Rotate</span>
               <div className="editor-toolbar">
                 <button
                   className="secondary-button"
-                  onClick={() =>
-                    setEdits(resetAnnotationsForTransform((edits.rotation + 270) % 360, null))
-                  }
+                  onClick={() => setEdits(transformEdits((edits.rotation + 270) % 360, null))}
                   type="button"
                 >
                   <RotateCcw size={14} aria-hidden="true" />
@@ -301,16 +362,32 @@ export function PageEditorModal({
                 </button>
                 <button
                   className="secondary-button"
-                  onClick={() =>
-                    setEdits(resetAnnotationsForTransform((edits.rotation + 90) % 360, null))
-                  }
+                  onClick={() => setEdits(transformEdits((edits.rotation + 90) % 360, null))}
                   type="button"
                 >
                   <RotateCw size={14} aria-hidden="true" />
                   Right
                 </button>
               </div>
+              {hasAnnotations ? (
+                <p className="editor-note">
+                  Rotating or re-cropping clears drawings, text, and blurs.
+                </p>
+              ) : null}
             </div>
+
+            {tool === "crop" && edits.crop ? (
+              <div className="editor-control-group">
+                <span className="editor-group-label">Crop</span>
+                <button
+                  className="secondary-button"
+                  onClick={() => setEdits(transformEdits(edits.rotation, null))}
+                  type="button"
+                >
+                  Clear crop
+                </button>
+              </div>
+            ) : null}
 
             {tool === "draw" ? (
               <div className="editor-control-group">
@@ -359,7 +436,6 @@ export function PageEditorModal({
                     onChange={(event) => setTextSize(Number(event.target.value))}
                   />
                 </label>
-                <p className="muted">Click on the page to place text.</p>
               </div>
             ) : null}
 
@@ -376,18 +452,18 @@ export function PageEditorModal({
                     onChange={(event) => setBlurIntensity(Number(event.target.value))}
                   />
                 </label>
-                <p className="muted">Drag a rectangle over anything that should be hidden.</p>
               </div>
             ) : null}
 
             <div className="editor-control-group">
-              <span className="section-eyebrow">Current edits</span>
+              <span className="editor-group-label">Applied</span>
               <div className="editor-stats">
                 <span>Rotation {edits.rotation}°</span>
-                <span>{edits.crop ? "Crop applied" : "No crop"}</span>
-                <span>{edits.strokes.length} strokes</span>
-                <span>{edits.texts.length} text items</span>
-                <span>{edits.blurRegions.length} blur regions</span>
+                <span>{edits.crop ? "Cropped" : "No crop"}</span>
+                <span>
+                  {edits.strokes.length} drawing{edits.strokes.length === 1 ? "" : "s"} ·{" "}
+                  {edits.texts.length} text · {edits.blurRegions.length} blur
+                </span>
               </div>
             </div>
 
@@ -398,7 +474,7 @@ export function PageEditorModal({
                 onClick={() => setEdits({ ...edits, strokes: edits.strokes.slice(0, -1) })}
                 type="button"
               >
-                Undo stroke
+                Undo draw
               </button>
               <button
                 className="secondary-button"
@@ -407,6 +483,16 @@ export function PageEditorModal({
                 type="button"
               >
                 Undo text
+              </button>
+              <button
+                className="secondary-button"
+                disabled={edits.blurRegions.length === 0}
+                onClick={() =>
+                  setEdits({ ...edits, blurRegions: edits.blurRegions.slice(0, -1) })
+                }
+                type="button"
+              >
+                Undo blur
               </button>
               <button
                 className="secondary-button danger-button"
@@ -427,21 +513,28 @@ export function PageEditorModal({
                 <span>{loadError}</span>
               </div>
             ) : null}
+            {!loadError && !imageReady ? (
+              <div className="editor-canvas-loading">
+                <Loader2 size={22} className="spin" aria-hidden="true" />
+                <span>Loading page image…</span>
+              </div>
+            ) : null}
             <canvas
               className="editor-canvas"
+              style={{ cursor: TOOL_CURSOR[tool] }}
               height={workingSize.height}
               ref={canvasRef}
               width={workingSize.width}
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
-              onPointerLeave={handlePointerUp}
+              onPointerCancel={handlePointerCancel}
             />
           </div>
         </div>
 
         <div className="editor-modal__footer">
-          <button className="secondary-button" onClick={onClose} type="button">
+          <button className="secondary-button" onClick={handleClose} type="button">
             Cancel
           </button>
           <button
@@ -596,6 +689,14 @@ function buildPreviewCanvas(
   if (dragState && (tool === "crop" || tool === "blur")) {
     const region = normalizeRegion(dragState.start, dragState.current);
     croppedCtx.save();
+    if (tool === "crop") {
+      // Dim everything outside the pending crop selection.
+      croppedCtx.fillStyle = "rgba(15, 23, 42, 0.4)";
+      croppedCtx.fillRect(0, 0, croppedCanvas.width, region.y);
+      croppedCtx.fillRect(0, region.y, region.x, region.height);
+      croppedCtx.fillRect(region.x + region.width, region.y, croppedCanvas.width, region.height);
+      croppedCtx.fillRect(0, region.y + region.height, croppedCanvas.width, croppedCanvas.height);
+    }
     croppedCtx.strokeStyle = tool === "crop" ? "#0f766e" : "#dc2626";
     croppedCtx.lineWidth = 2;
     croppedCtx.setLineDash([10, 6]);

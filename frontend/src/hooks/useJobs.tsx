@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
-import { fetchJob, fetchJobs } from "../lib/api";
+import { deleteJob, fetchJob, fetchJobs } from "../lib/api";
 import type { ProcessingJob } from "../types";
 
 function needsPolling(job: ProcessingJob | null): boolean {
@@ -28,6 +28,7 @@ interface JobsContextValue {
   readyCount: number;
   handleJobCreated: (job: ProcessingJob) => void;
   handleJobUpdated: (job: ProcessingJob) => void;
+  handleJobDeleted: (jobId: string) => Promise<void>;
   handleSelectJob: (jobId: string) => void;
   refreshJobs: () => Promise<ProcessingJob[]>;
 }
@@ -119,6 +120,15 @@ export function JobsProvider({ children }: { children: ReactNode }) {
     navigate(`/review/${nextJobId}`);
   }
 
+  async function handleJobDeleted(deletedJobId: string) {
+    await deleteJob(deletedJobId);
+    setJobs((currentJobs) => currentJobs.filter((item) => item.id !== deletedJobId));
+    setActiveJob((current) => (current?.id === deletedJobId ? null : current));
+    if (jobId === deletedJobId) {
+      navigate("/");
+    }
+  }
+
   const value: JobsContextValue = {
     jobs,
     activeJob,
@@ -127,6 +137,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
     readyCount,
     handleJobCreated,
     handleJobUpdated,
+    handleJobDeleted,
     handleSelectJob,
     refreshJobs,
   };

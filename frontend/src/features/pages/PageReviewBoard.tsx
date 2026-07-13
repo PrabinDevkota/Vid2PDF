@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  FileText,
   GripVertical,
   Loader2,
   Pencil,
@@ -20,7 +21,7 @@ import {
 } from "../../lib/api";
 import { PageEditorModal } from "./PageEditorModal";
 
-type ReviewTab = "pages" | "video" | "deleted";
+type ReviewTab = "pages" | "text" | "video" | "deleted";
 
 /** Page artifacts are rewritten in place on rotate/edit; bust the browser cache. */
 function withCacheKey(url: string | null, cacheKey: string): string | null {
@@ -49,11 +50,6 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
 
   const visiblePages = job?.pages.filter((page) => !page.deleted) ?? [];
   const deletedPages = job?.pages.filter((page) => page.deleted) ?? [];
-  const manualPages = useMemo(
-    () => visiblePages.filter((page) => page.manual),
-    [visiblePages],
-  );
-  const exportDownloadUrl = resolveArtifactUrl(job?.export.downloadUrl ?? null);
   const sourceVideoUrl = resolveArtifactUrl(job?.sourceVideoUrl ?? null);
 
   useEffect(() => {
@@ -93,65 +89,51 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
     setVideoCurrentTime(clamped);
   }
 
-  async function handleSaveEdits(pageId: string, edits: PageEdits) {
+  async function runPageAction(action: () => Promise<ProcessingJob>, failureMessage: string) {
     if (!job) {
-      return;
+      return false;
     }
-
     setIsMutating(true);
     setActionError(null);
     try {
-      const updatedJob = await updatePage(job.id, pageId, { edits });
+      const updatedJob = await action();
       onJobUpdated(updatedJob);
-      setEditingPage(null);
-      toast("Page edits saved.", "success");
+      return true;
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to save page edits.";
+      const message = error instanceof Error ? error.message : failureMessage;
       setActionError(message);
       toast(message, "error");
+      return false;
     } finally {
       setIsMutating(false);
+    }
+  }
+
+  async function handleSaveEdits(pageId: string, edits: PageEdits) {
+    const ok = await runPageAction(
+      () => updatePage(job!.id, pageId, { edits }),
+      "Failed to save page edits.",
+    );
+    if (ok) {
+      setEditingPage(null);
+      toast("Page edits saved.", "success");
     }
   }
 
   async function handleRotate(page: ExtractedPage) {
-    if (!job) {
-      return;
-    }
-
-    setIsMutating(true);
-    setActionError(null);
-    try {
-      const updatedJob = await updatePage(job.id, page.id, {
-        rotation: (page.edits.rotation + 90) % 360,
-      });
-      onJobUpdated(updatedJob);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to rotate page.";
-      setActionError(message);
-      toast(message, "error");
-    } finally {
-      setIsMutating(false);
-    }
+    await runPageAction(
+      () => updatePage(job!.id, page.id, { rotation: (page.edits.rotation + 90) % 360 }),
+      "Failed to rotate page.",
+    );
   }
 
   async function handleDelete(pageId: string, deleted: boolean) {
-    if (!job) {
-      return;
-    }
-
-    setIsMutating(true);
-    setActionError(null);
-    try {
-      const updatedJob = await updatePage(job.id, pageId, { deleted });
-      onJobUpdated(updatedJob);
+    const ok = await runPageAction(
+      () => updatePage(job!.id, pageId, { deleted }),
+      "Failed to update page.",
+    );
+    if (ok) {
       toast(deleted ? "Page removed." : "Page restored.", "success");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to update page.";
-      setActionError(message);
-      toast(message, "error");
-    } finally {
-      setIsMutating(false);
     }
   }
 
@@ -159,99 +141,47 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
     if (!job) {
       return;
     }
-
     const currentIndex = visiblePages.findIndex((page) => page.id === pageId);
     const nextIndex = currentIndex + direction;
     if (currentIndex < 0 || nextIndex < 0 || nextIndex >= visiblePages.length) {
       return;
     }
-
     const reordered = [...visiblePages];
     const [moved] = reordered.splice(currentIndex, 1);
     reordered.splice(nextIndex, 0, moved);
-
-    const deletedPageIds = job.pages.filter((page) => page.deleted).map((page) => page.id);
-    setIsMutating(true);
-    setActionError(null);
-    try {
-      const updatedJob = await reorderPages(job.id, [
-        ...reordered.map((page) => page.id),
-        ...deletedPageIds,
-      ]);
-      onJobUpdated(updatedJob);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to reorder pages.";
-      setActionError(message);
-      toast(message, "error");
-    } finally {
-      setIsMutating(false);
-    }
+    const deletedPageIds = deletedPages.map((page) => page.id);
+    await runPageAction(
+      () => reorderPages(job.id, [...reordered.map((page) => page.id), ...deletedPageIds]),
+      "Failed to reorder pages.",
+    );
   }
 
   async function handleReorder(activeOrder: string[]) {
     if (!job) {
       return;
     }
-
-    const deletedPageIds = job.pages.filter((page) => page.deleted).map((page) => page.id);
-    setIsMutating(true);
-    setActionError(null);
-    try {
-      const updatedJob = await reorderPages(job.id, [...activeOrder, ...deletedPageIds]);
-      onJobUpdated(updatedJob);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to reorder pages.";
-      setActionError(message);
-      toast(message, "error");
-    } finally {
-      setIsMutating(false);
-      setDraggedPageId(null);
-    }
-  }
-
-  async function handleBulkDelete() {
-    if (!job || visiblePages.length === 0) {
-      return;
-    }
-
-    setIsMutating(true);
-    setActionError(null);
-    try {
-      const updatedJob = await bulkUpdatePages(job.id, {
-        pageIds: visiblePages.map((page) => page.id),
-        deleted: true,
-      });
-      onJobUpdated(updatedJob);
-      toast("All active pages removed.", "success");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to remove pages.";
-      setActionError(message);
-      toast(message, "error");
-    } finally {
-      setIsMutating(false);
-    }
+    const deletedPageIds = deletedPages.map((page) => page.id);
+    await runPageAction(
+      () => reorderPages(job.id, [...activeOrder, ...deletedPageIds]),
+      "Failed to reorder pages.",
+    );
+    setDraggedPageId(null);
   }
 
   async function handleRestoreAll() {
     if (!job || deletedPages.length === 0) {
       return;
     }
-
-    setIsMutating(true);
-    setActionError(null);
-    try {
-      const updatedJob = await bulkUpdatePages(job.id, {
-        pageIds: deletedPages.map((page) => page.id),
-        deleted: false,
-      });
-      onJobUpdated(updatedJob);
+    const ok = await runPageAction(
+      () =>
+        bulkUpdatePages(job.id, {
+          pageIds: deletedPages.map((page) => page.id),
+          deleted: false,
+        }),
+      "Failed to restore pages.",
+    );
+    if (ok) {
       toast("All removed pages restored.", "success");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to restore pages.";
-      setActionError(message);
-      toast(message, "error");
-    } finally {
-      setIsMutating(false);
     }
   }
 
@@ -259,19 +189,12 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
     if (!job) {
       return;
     }
-
-    setIsMutating(true);
-    setActionError(null);
-    try {
-      const updatedJob = await addManualPage(job.id, videoCurrentTime);
-      onJobUpdated(updatedJob);
+    const ok = await runPageAction(
+      () => addManualPage(job.id, videoCurrentTime),
+      "Failed to add manual page.",
+    );
+    if (ok) {
       toast("Frame added as a new page.", "success");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to add manual page.";
-      setActionError(message);
-      toast(message, "error");
-    } finally {
-      setIsMutating(false);
     }
   }
 
@@ -279,35 +202,20 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
     return null;
   }
 
+  const isProcessing = job.status === "processing" || job.status === "queued";
+  const pagesWithText = visiblePages.filter(
+    (page) => page.ocrStatus === "ready" && page.ocrText,
+  );
+
   return (
     <SectionCard
-      eyebrow="Review"
-      title="Page review"
-      subtitle="Inspect extracted pages, make corrections, and prepare for export."
+      title="Pages"
+      subtitle={`${visiblePages.length} page${visiblePages.length === 1 ? "" : "s"} in the export${
+        deletedPages.length > 0 ? ` · ${deletedPages.length} removed` : ""
+      }`}
     >
       <div className="review-board">
-        <div className="review-summary-row">
-          <div className="review-metrics">
-            <div className="review-metric">
-              <strong>{visiblePages.length}</strong>
-              <span>Pages in review</span>
-            </div>
-            <div className="review-metric">
-              <strong>{deletedPages.length}</strong>
-              <span>Pages removed</span>
-            </div>
-            <div className="review-metric">
-              <strong>
-                {job.stages.filter((stage) => stage.status === "complete").length}
-              </strong>
-              <span>Stages complete</span>
-            </div>
-            <div className="review-metric">
-              <strong>{manualPages.length}</strong>
-              <span>Manual recovery</span>
-            </div>
-          </div>
-
+        {isProcessing ? (
           <div className="progress-block">
             <div className="progress-block__track">
               <div
@@ -315,58 +223,28 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                 style={{ width: `${job.progress.percent}%` }}
               />
             </div>
-            <span>{job.progress.percent}% — {job.progress.message}</span>
-          </div>
-        </div>
-
-        {job.status === "processing" || job.status === "queued" ? (
-          <div className="stage-strip">
-            {job.stages.map((stage) => (
-              <div className="stage-chip" key={stage.key}>
-                <span className={`stage-chip__dot stage-chip__dot--${stage.status}`} />
-                <div>
-                  <strong>{stage.label}</strong>
-                  <span>{stage.status}</span>
+            <span>{job.progress.message}</span>
+            <div className="stage-strip">
+              {job.stages.map((stage) => (
+                <div className="stage-chip" key={stage.key}>
+                  <span className={`stage-chip__dot stage-chip__dot--${stage.status}`} />
+                  <span>{stage.label}</span>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         ) : null}
 
-        {job.export.status !== "idle" ? (
-          <div
-            className={`status-banner ${job.export.status === "failed" ? "status-banner--error" : ""}`}
-          >
-            <strong>
-              {job.export.status === "ready"
-                ? "Export ready"
-                : job.export.status === "processing"
-                  ? "Export in progress"
-                  : "Export unavailable"}
-            </strong>
-            <span>
-              {job.export.status === "ready"
-                ? `${job.export.filename} is ready to download.`
-                : job.export.status === "processing"
-                  ? `${job.export.progressPercent}% complete. Preparing the final PDF.`
-                  : job.export.error ?? "Export could not be completed."}
-            </span>
-            {exportDownloadUrl ? (
-              <a
-                className="download-link"
-                href={exportDownloadUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Download exported PDF
-              </a>
-            ) : null}
+        {job.export.status === "failed" && job.export.error ? (
+          <div className="status-banner status-banner--error">
+            <strong>Image PDF export failed</strong>
+            <span>{job.export.error}</span>
           </div>
         ) : null}
 
         {actionError ? (
           <div className="status-banner status-banner--error">
-            <strong>Review action failed</strong>
+            <strong>Action failed</strong>
             <span>{actionError}</span>
           </div>
         ) : null}
@@ -379,7 +257,16 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
             aria-selected={activeTab === "pages"}
             type="button"
           >
-            Pages ({visiblePages.length})
+            Pages
+          </button>
+          <button
+            className={`review-tab ${activeTab === "text" ? "review-tab--active" : ""}`}
+            onClick={() => setActiveTab("text")}
+            role="tab"
+            aria-selected={activeTab === "text"}
+            type="button"
+          >
+            Extracted text
           </button>
           <button
             className={`review-tab ${activeTab === "video" ? "review-tab--active" : ""}`}
@@ -398,38 +285,14 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
               aria-selected={activeTab === "deleted"}
               type="button"
             >
-              Deleted ({deletedPages.length})
+              Removed ({deletedPages.length})
             </button>
           ) : null}
         </div>
 
         {activeTab === "pages" ? (
           <div className="review-tab-panel" role="tabpanel">
-            <div className="review-toolbar">
-              <div className="review-toolbar__group">
-                <button
-                  className="secondary-button danger-button"
-                  disabled={isMutating || visiblePages.length === 0}
-                  onClick={() => void handleBulkDelete()}
-                  type="button"
-                >
-                  Remove all active pages
-                </button>
-                <button
-                  className="secondary-button"
-                  disabled={isMutating || deletedPages.length === 0}
-                  onClick={() => void handleRestoreAll()}
-                  type="button"
-                >
-                  Restore all removed pages
-                </button>
-              </div>
-              <span className="review-toolbar__hint">
-                Drag page cards to reorder, or use the arrow buttons.
-              </span>
-            </div>
-
-            {job.status !== "ready" ? (
+            {job.status !== "ready" && visiblePages.length === 0 ? (
               <div className="page-grid-skeleton" aria-label="Processing pages">
                 <span />
                 <span />
@@ -438,7 +301,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
               </div>
             ) : visiblePages.length === 0 ? (
               <div className="empty-state empty-state--large">
-                <strong>No active pages available</strong>
+                <strong>No pages in this session</strong>
                 <p>Restore removed pages or recover frames from the source video.</p>
               </div>
             ) : (
@@ -473,119 +336,127 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                       }}
                     >
                       <div className="page-card__preview">
-                        <div className="page-card__preview-tag">Page {index + 1}</div>
-                        <div className="page-card__drag-handle">
-                          <GripVertical size={12} aria-hidden="true" />
-                          Drag
-                        </div>
                         {thumbnailUrl ? (
                           <img
-                            alt={page.previewLabel}
+                            alt={`Page ${index + 1}`}
                             className="page-preview-image"
                             src={thumbnailUrl}
                           />
                         ) : (
                           <div className="page-placeholder">
-                            <span>{page.previewLabel}</span>
+                            <span>Page {index + 1}</span>
                           </div>
                         )}
                       </div>
-                      <div className="page-card__content">
-                        <div className="page-card__header">
-                          <div className="page-card__title">
-                            <h4>Page {index + 1}</h4>
-                            {page.manual ? (
-                              <span className="page-origin-badge page-origin-badge--manual">
-                                Manual
-                              </span>
-                            ) : (
-                              <span className="page-origin-badge">Auto</span>
-                            )}
-                            {hasEdits(page) ? (
-                              <span className="page-origin-badge page-origin-badge--edited">
-                                Edited
-                              </span>
-                            ) : null}
-                            {page.ocrStatus === "ready" ? (
-                              <span className="page-origin-badge page-origin-badge--manual">
-                                OCR
-                              </span>
-                            ) : page.ocrStatus === "empty" ? (
-                              <span className="page-origin-badge">No text</span>
-                            ) : page.ocrStatus === "failed" ? (
-                              <span className="page-origin-badge page-origin-badge--edited">
-                                OCR failed
-                              </span>
-                            ) : null}
-                          </div>
-                          <span className="page-score">
-                            {page.sharpnessScore.toFixed(2)}
-                          </span>
+                      <div className="page-card__footer">
+                        <div className="page-card__label">
+                          <GripVertical
+                            className="page-card__grip"
+                            size={13}
+                            aria-hidden="true"
+                          />
+                          <strong>Page {index + 1}</strong>
+                          {page.manual ? (
+                            <span className="page-badge">Manual</span>
+                          ) : null}
+                          {hasEdits(page) ? (
+                            <span className="page-badge">Edited</span>
+                          ) : null}
+                          {page.ocrStatus === "failed" ? (
+                            <span className="page-badge page-badge--warn">OCR failed</span>
+                          ) : null}
                         </div>
-                        <div className="page-meta-row">
-                          <span>
-                            {page.manual
-                              ? `Recovered at ${page.sourceTimestamp.toFixed(1)}s`
-                              : `Segment ${page.segmentStart.toFixed(1)}s–${page.segmentEnd.toFixed(1)}s`}
-                          </span>
-                          <span>{page.edits.rotation}°</span>
+                        <div className="page-card__actions">
+                          <button
+                            className="icon-button"
+                            disabled={isMutating || index === 0}
+                            onClick={() => void handleShift(page.id, -1)}
+                            title="Move up"
+                            type="button"
+                          >
+                            <ArrowUp size={14} aria-hidden="true" />
+                          </button>
+                          <button
+                            className="icon-button"
+                            disabled={isMutating || index === visiblePages.length - 1}
+                            onClick={() => void handleShift(page.id, 1)}
+                            title="Move down"
+                            type="button"
+                          >
+                            <ArrowDown size={14} aria-hidden="true" />
+                          </button>
+                          <button
+                            className="icon-button"
+                            disabled={isMutating}
+                            onClick={() => void handleRotate(page)}
+                            title="Rotate 90° clockwise"
+                            type="button"
+                          >
+                            <RotateCw size={14} aria-hidden="true" />
+                          </button>
+                          <button
+                            className="icon-button"
+                            disabled={isMutating}
+                            onClick={() => setEditingPage(page)}
+                            title="Edit page"
+                            type="button"
+                          >
+                            <Pencil size={14} aria-hidden="true" />
+                          </button>
+                          <button
+                            className="icon-button icon-button--danger"
+                            disabled={isMutating}
+                            onClick={() => void handleDelete(page.id, true)}
+                            title="Remove page"
+                            type="button"
+                          >
+                            <Trash2 size={14} aria-hidden="true" />
+                          </button>
                         </div>
-                      </div>
-                      <div className="page-card__actions">
-                        <button
-                          className="icon-button"
-                          disabled={isMutating || index === 0}
-                          onClick={() => void handleShift(page.id, -1)}
-                          title="Move up"
-                          type="button"
-                        >
-                          <ArrowUp size={14} aria-hidden="true" />
-                          <span>Up</span>
-                        </button>
-                        <button
-                          className="icon-button"
-                          disabled={isMutating || index === visiblePages.length - 1}
-                          onClick={() => void handleShift(page.id, 1)}
-                          title="Move down"
-                          type="button"
-                        >
-                          <ArrowDown size={14} aria-hidden="true" />
-                          <span>Down</span>
-                        </button>
-                        <button
-                          className="icon-button"
-                          disabled={isMutating}
-                          onClick={() => void handleRotate(page)}
-                          title="Rotate 90° clockwise"
-                          type="button"
-                        >
-                          <RotateCw size={14} aria-hidden="true" />
-                          <span>Rotate</span>
-                        </button>
-                        <button
-                          className="icon-button"
-                          disabled={isMutating}
-                          onClick={() => setEditingPage(page)}
-                          title="Edit page"
-                          type="button"
-                        >
-                          <Pencil size={14} aria-hidden="true" />
-                          <span>Edit</span>
-                        </button>
-                        <button
-                          className="icon-button icon-button--danger"
-                          disabled={isMutating}
-                          onClick={() => void handleDelete(page.id, true)}
-                          title="Delete page"
-                          type="button"
-                        >
-                          <Trash2 size={14} aria-hidden="true" />
-                          <span>Delete</span>
-                        </button>
                       </div>
                     </article>
                   );
                 })}
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        {activeTab === "text" ? (
+          <div className="review-tab-panel" role="tabpanel">
+            {pagesWithText.length === 0 ? (
+              <div className="empty-state">
+                <FileText size={24} aria-hidden="true" />
+                <strong>No extracted text yet</strong>
+                <p>
+                  {visiblePages.length === 0
+                    ? "There are no pages to extract text from."
+                    : "Text appears here after OCR runs. Pages edited recently are re-read during the next text export."}
+                </p>
+              </div>
+            ) : (
+              <div className="ocr-text-list">
+                {visiblePages.map((page, index) => (
+                  <article className="ocr-text-card" key={page.id}>
+                    <header>
+                      <strong>Page {index + 1}</strong>
+                      {page.ocrStatus === "ready" && page.ocrText ? (
+                        <span className="muted">{page.ocrText.length} characters</span>
+                      ) : (
+                        <span className="muted">
+                          {page.ocrStatus === "empty"
+                            ? "No text detected"
+                            : page.ocrStatus === "failed"
+                              ? "OCR failed"
+                              : "Pending OCR"}
+                        </span>
+                      )}
+                    </header>
+                    {page.ocrStatus === "ready" && page.ocrText ? (
+                      <p>{page.ocrText}</p>
+                    ) : null}
+                  </article>
+                ))}
               </div>
             )}
           </div>
@@ -660,7 +531,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                         onClick={() => seekVideo(videoCurrentTime - 1)}
                         type="button"
                       >
-                        Back 1s
+                        −1s
                       </button>
                       <button
                         className="secondary-button"
@@ -668,7 +539,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                         onClick={() => seekVideo(videoCurrentTime - 0.2)}
                         type="button"
                       >
-                        Back 0.2s
+                        −0.2s
                       </button>
                       <button
                         className="secondary-button"
@@ -676,7 +547,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                         onClick={() => seekVideo(videoCurrentTime + 0.2)}
                         type="button"
                       >
-                        Forward 0.2s
+                        +0.2s
                       </button>
                       <button
                         className="secondary-button"
@@ -684,7 +555,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                         onClick={() => seekVideo(videoCurrentTime + 1)}
                         type="button"
                       >
-                        Forward 1s
+                        +1s
                       </button>
                     </div>
                   </div>
@@ -692,7 +563,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
               ) : (
                 <div className="empty-state">
                   <strong>Source video unavailable</strong>
-                  <p>This session does not expose a playable source video yet.</p>
+                  <p>This session does not expose a playable source video.</p>
                 </div>
               )}
             </div>
@@ -703,10 +574,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
           <div className="review-tab-panel" role="tabpanel">
             <div className="deleted-pages-panel">
               <div className="deleted-pages-panel__header">
-                <div>
-                  <strong>Removed pages</strong>
-                  <p>These pages are excluded from export but can be restored.</p>
-                </div>
+                <p>These pages are excluded from export but can be restored.</p>
                 <button
                   className="secondary-button"
                   disabled={isMutating}
@@ -720,11 +588,9 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                 {deletedPages.map((page) => (
                   <article className="deleted-page-card" key={page.id}>
                     <div>
-                      <strong>
-                        {page.previewLabel} {page.manual ? "• Manual" : "• Auto"}
-                      </strong>
+                      <strong>{page.previewLabel}</strong>
                       <span>
-                        Frame #{page.sourceFrameIndex} at {page.sourceTimestamp.toFixed(1)}s
+                        {page.manual ? "Manual · " : ""}from {page.sourceTimestamp.toFixed(1)}s
                       </span>
                     </div>
                     <button

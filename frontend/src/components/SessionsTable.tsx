@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { FileVideo, Search } from "lucide-react";
+import { FileVideo, Search, Trash2 } from "lucide-react";
+import { useToast } from "./Toast";
 import type { ProcessingJob } from "../types";
 
 interface SessionsTableProps {
@@ -7,9 +8,9 @@ interface SessionsTableProps {
   activeJobId?: string | null;
   isLoading: boolean;
   onSelectJob: (jobId: string) => void;
+  onDeleteJob?: (jobId: string) => Promise<void>;
   limit?: number;
   showViewAll?: boolean;
-  onViewAll?: () => void;
 }
 
 function formatDate(value: string) {
@@ -26,12 +27,15 @@ export function SessionsTable({
   activeJobId,
   isLoading,
   onSelectJob,
+  onDeleteJob,
   limit,
   showViewAll,
-  onViewAll,
 }: SessionsTableProps) {
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [showAll, setShowAll] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   const filteredJobs = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -44,6 +48,27 @@ export function SessionsTable({
     const effectiveLimit = showAll ? undefined : limit;
     return effectiveLimit ? filtered.slice(0, effectiveLimit) : filtered;
   }, [jobs, search, limit, showAll]);
+
+  async function handleDelete(jobId: string) {
+    if (!onDeleteJob) {
+      return;
+    }
+    if (confirmingId !== jobId) {
+      setConfirmingId(jobId);
+      return;
+    }
+    setConfirmingId(null);
+    setDeletingId(jobId);
+    try {
+      await onDeleteJob(jobId);
+      toast("Session deleted.", "success");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete session.";
+      toast(message, "error");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -59,10 +84,9 @@ export function SessionsTable({
   if (jobs.length === 0) {
     return (
       <div className="empty-state empty-state--compact">
-        <FileVideo className="empty-state__lucide-icon" size={32} aria-hidden="true" />
+        <FileVideo size={28} aria-hidden="true" />
         <strong>No sessions yet</strong>
-        <p>Upload your first document-viewing video to start building a PDF.</p>
-        <span className="empty-state__cta">Upload a video above to get started</span>
+        <p>Upload your first document video to get started.</p>
       </div>
     );
   }
@@ -71,10 +95,10 @@ export function SessionsTable({
     <div className="sessions-table-wrap">
       <div className="sessions-table-toolbar">
         <div className="search-input">
-          <Search size={16} aria-hidden="true" />
+          <Search size={15} aria-hidden="true" />
           <input
             aria-label="Search sessions"
-            placeholder="Search by filename..."
+            placeholder="Search sessions"
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -82,97 +106,63 @@ export function SessionsTable({
         </div>
         {showViewAll && limit && jobs.length > limit ? (
           <button
-            className="secondary-button secondary-button--quiet"
-            onClick={() => {
-              setShowAll((current) => !current);
-              onViewAll?.();
-            }}
+            className="link-button"
+            onClick={() => setShowAll((current) => !current)}
             type="button"
           >
-            {showAll ? "Show less" : `View all (${jobs.length})`}
+            {showAll ? "Show fewer" : `View all ${jobs.length}`}
           </button>
         ) : null}
       </div>
 
-      <div className="sessions-table" role="table">
-        <div className="sessions-table__head" role="row">
-          <span role="columnheader">Name</span>
-          <span role="columnheader">Status</span>
-          <span role="columnheader">Mode</span>
-          <span role="columnheader">Pages</span>
-          <span role="columnheader">Export</span>
-          <span role="columnheader">Updated</span>
+      {filteredJobs.length === 0 ? (
+        <div className="sessions-table__empty">
+          <p>No sessions match &ldquo;{search}&rdquo;</p>
         </div>
-        {filteredJobs.length === 0 ? (
-          <div className="sessions-table__empty">
-            <p>No sessions match &ldquo;{search}&rdquo;</p>
-          </div>
-        ) : (
-          filteredJobs.map((job) => {
+      ) : (
+        <ul className="sessions-list">
+          {filteredJobs.map((job) => {
             const activePageCount = job.pages.filter((page) => !page.deleted).length;
+            const isConfirming = confirmingId === job.id;
             return (
-              <button
+              <li
                 key={job.id}
-                className={`sessions-table__row ${activeJobId === job.id ? "sessions-table__row--active" : ""}`}
-                onClick={() => onSelectJob(job.id)}
-                role="row"
-                type="button"
+                className={`session-row ${activeJobId === job.id ? "session-row--active" : ""}`}
               >
-                <span className="sessions-table__name" role="cell" title={job.filename}>
-                  {job.filename}
-                </span>
-                <span role="cell">
-                  <span className={`status-pill status-pill--${job.status}`}>
-                    {job.status}
+                <button
+                  className="session-row__main"
+                  onClick={() => onSelectJob(job.id)}
+                  type="button"
+                >
+                  <span className="session-row__name" title={job.filename}>
+                    {job.filename}
                   </span>
-                </span>
-                <span role="cell">
-                  <span className="mode-badge">
+                  <span className="session-row__meta">
                     {job.processingMode === "camera" ? "Camera" : "Screen"}
+                    {" · "}
+                    {activePageCount} page{activePageCount === 1 ? "" : "s"}
+                    {" · "}
+                    {formatDate(job.updatedAt)}
                   </span>
-                </span>
-                <span role="cell">{activePageCount}</span>
-                <span role="cell">
-                  <span className={`status-pill status-pill--${job.export.status}`}>
-                    {job.export.status === "idle" ? "not exported" : job.export.status}
-                  </span>
-                </span>
-                <span className="sessions-table__date" role="cell">
-                  {formatDate(job.updatedAt)}
-                </span>
-              </button>
+                </button>
+                <span className={`status-pill status-pill--${job.status}`}>{job.status}</span>
+                {onDeleteJob ? (
+                  <button
+                    className={`session-row__delete ${isConfirming ? "session-row__delete--confirm" : ""}`}
+                    disabled={deletingId === job.id}
+                    onClick={() => void handleDelete(job.id)}
+                    onBlur={() => setConfirmingId(null)}
+                    title={isConfirming ? "Click again to delete permanently" : "Delete session"}
+                    type="button"
+                  >
+                    {isConfirming ? "Confirm" : <Trash2 size={15} aria-hidden="true" />}
+                  </button>
+                ) : null}
+              </li>
             );
-          })
-        )}
-      </div>
-
-      <div className="sessions-cards" aria-label="Sessions list">
-        {filteredJobs.map((job) => {
-          const activePageCount = job.pages.filter((page) => !page.deleted).length;
-          return (
-            <button
-              key={job.id}
-              className={`session-card ${activeJobId === job.id ? "session-card--active" : ""}`}
-              onClick={() => onSelectJob(job.id)}
-              type="button"
-            >
-              <div className="session-card__head">
-                <strong title={job.filename}>{job.filename}</strong>
-                <span className={`status-pill status-pill--${job.status}`}>
-                  {job.status}
-                </span>
-              </div>
-              <div className="session-card__meta">
-                <span className="mode-badge">
-                  {job.processingMode === "camera" ? "Camera" : "Screen"}
-                </span>
-                <span>{activePageCount} pages</span>
-                <span>{formatDate(job.updatedAt)}</span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+          })}
+        </ul>
+      )}
     </div>
   );
 }

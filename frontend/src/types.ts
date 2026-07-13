@@ -98,6 +98,7 @@ export interface ExportState {
   progressPercent: number;
   filename: string | null;
   downloadUrl: string | null;
+  texUrl?: string | null;
   requestedAt: string | null;
   completedAt: string | null;
   error: string | null;

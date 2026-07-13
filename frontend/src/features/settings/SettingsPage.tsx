@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { CreditCard, Shield, Users } from "lucide-react";
 import { AppHeader } from "../../components/AppHeader";
 import { SectionCard } from "../../components/SectionCard";
 import type { ProcessingMode } from "../../types";
@@ -55,8 +54,7 @@ export function SettingsPage() {
 
       <div className="settings-grid">
         <SectionCard
-          eyebrow="Defaults"
-          title="Processing mode"
+          title="Default processing mode"
           subtitle="Choose the default source type for new uploads."
         >
           <div className="mode-selector" role="tablist" aria-label="Default processing mode">
@@ -85,7 +83,6 @@ export function SettingsPage() {
         </SectionCard>
 
         <SectionCard
-          eyebrow="System"
           title="API status"
           subtitle="Connection to the Vid2PDF backend."
         >
@@ -104,30 +101,6 @@ export function SettingsPage() {
               <span>{health?.message}</span>
             </div>
           )}
-        </SectionCard>
-
-        <SectionCard
-          eyebrow="Coming soon"
-          title="Workspace features"
-          subtitle="Planned SaaS capabilities — not yet available."
-        >
-          <div className="coming-soon-grid">
-            <div className="coming-soon-card">
-              <Shield size={20} aria-hidden="true" />
-              <strong>Authentication</strong>
-              <p>Sign in and secure your sessions.</p>
-            </div>
-            <div className="coming-soon-card">
-              <Users size={20} aria-hidden="true" />
-              <strong>Team workspaces</strong>
-              <p>Share sessions and collaborate on reviews.</p>
-            </div>
-            <div className="coming-soon-card">
-              <CreditCard size={20} aria-hidden="true" />
-              <strong>Billing & plans</strong>
-              <p>Usage limits and subscription tiers.</p>
-            </div>
-          </div>
         </SectionCard>
       </div>
     </main>
