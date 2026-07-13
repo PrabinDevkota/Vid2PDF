@@ -90,6 +90,73 @@ def test_find_consecutive_near_duplicates_skips_distinct_pages() -> None:
     assert flags == []
 
 
+def test_token_set_similarity_detects_garbled_duplicates() -> None:
+    from app.processing.ocr import token_set_similarity
+
+    left = (
+        "DR. RAJEEV MENON (52) senior nuclear research director, brilliant and "
+        "intellectually dominant scientific patriotism authority believes recognition "
+        "COLONEL NIRBIK KAPOOR (45) senior intelligence officer overseeing investigation"
+    )
+    # Same page, differently garbled OCR: word noise differs, names/numbers survive.
+    right = (
+        "DR RAJEEV MEWON (52) senior nuclear rese4rch director briliant and "
+        "intellectually dominant scientific patriotism authority believes recognition "
+        "COLONEL NIRBIK KAPOOR (45) senior intelligence officer oversecing investigation"
+    )
+    distinct = "Completely different chapter about the reactor facility layout and security protocols"
+    assert token_set_similarity(left, right) >= 0.55
+    assert token_set_similarity(left, distinct) < 0.3
+
+
+def test_collapse_ocr_duplicates_handles_garbled_text() -> None:
+    from app.processing.ocr import collapse_ocr_duplicate_pages
+
+    quality_stub = _make_quality(score=0.5)
+
+    def make_page(page_id: str) -> SelectedPage:
+        frame = SampledFrame(timestamp=1.0, frame_index=1, image=None, quality=quality_stub)
+        return SelectedPage(
+            page_id=page_id,
+            page_number=1,
+            label="Page",
+            source_segment_id=page_id,
+            segment_start=1.0,
+            segment_end=2.0,
+            selected_frame=frame,
+            image_path="",
+            thumbnail_path="",
+        )
+
+    left_text = (
+        "DR. RAJEEV MENON (52) senior nuclear research director brilliant dominant "
+        "COLONEL NIRBIK KAPOOR (45) senior intelligence officer investigation evidence traitor"
+    )
+    right_text = (
+        "DR RAJEEV MEWON (52) senior nuclear research director xbrilliant dominant "
+        "COLONEL NIRBIK KAPOOR (45) senior intelligence officer investigation evidence traitor"
+    )
+    pages = [make_page("page-a"), make_page("page-b")]
+    ocr = [
+        PageText(page_id="page-a", page_number=1, raw_text=left_text, status="ready"),
+        PageText(page_id="page-b", page_number=2, raw_text=right_text, status="ready"),
+    ]
+    kept_pages, kept_ocr, removed = collapse_ocr_duplicate_pages(pages, ocr, threshold=0.95)
+    assert removed == 1
+    assert len(kept_pages) == 1
+    assert len(kept_ocr) == 1
+
+
+def test_normalize_ocr_text_strips_replacement_chars_and_smart_punctuation() -> None:
+    raw = "Beneath the mask of “Petrov” is Arjun� Rathore — an operative’s story"
+    cleaned = normalize_ocr_text(raw)
+    assert "�" not in cleaned
+    assert "“" not in cleaned
+    assert "—" not in cleaned
+    assert '"Petrov"' in cleaned
+    assert "operative's" in cleaned
+
+
 def test_build_latex_document_preserves_page_count_and_empty_placeholder() -> None:
     pages = [
         PageText(

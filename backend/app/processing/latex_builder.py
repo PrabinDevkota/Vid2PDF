@@ -110,10 +110,11 @@ def _page_body(page: PageText) -> str:
             return _format_paragraphs([block.text for block in page.blocks if block.text.strip()])
         return rf"\noindent\textcolor{{{WARN}}}{{\textit{{{escape_latex(EMPTY_PAGE_PLACEHOLDER)}}}}}"
 
-    if page.blocks:
+    # Prefer raw_text: it already groups lines into paragraphs by vertical
+    # gaps, whereas blocks are individual OCR lines.
+    paragraphs = [part.strip() for part in page.raw_text.split("\n\n") if part.strip()]
+    if not paragraphs and page.blocks:
         paragraphs = [block.text for block in page.blocks if block.text.strip()]
-    else:
-        paragraphs = [part.strip() for part in page.raw_text.split("\n\n") if part.strip()]
 
     paragraphs = _merge_flowing_paragraphs(paragraphs)
     if not paragraphs:

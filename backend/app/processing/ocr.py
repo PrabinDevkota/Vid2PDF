@@ -257,10 +257,24 @@ def extract_pages_text_parallel(
     ]
 
 
+_CHAR_NORMALIZATIONS = str.maketrans(
+    {
+        "�": None,  # U+FFFD replacement char from failed decodes
+        "‘": "'",
+        "’": "'",
+        "“": '"',
+        "”": '"',
+        "–": "-",
+        "—": "-",
+    }
+)
+
+
 def normalize_ocr_text(text: str) -> str:
     """Within-page cleanup: whitespace collapse and hyphenated line breaks."""
     if not text:
         return ""
+    text = text.translate(_CHAR_NORMALIZATIONS)
     text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)
     parts = re.split(r"\n\s*\n", text)
     cleaned_parts = []
@@ -304,6 +318,41 @@ def is_plausible_page_text(text: str) -> bool:
     return vowel_ratio >= 0.18
 
 
+def _distinctive_tokens(text: str) -> set[str]:
+    """Tokens that survive OCR garbling: real words (>=4 chars) and numbers."""
+    tokens: set[str] = set()
+    for token in re.findall(r"[a-z]{4,}|\d+", text.lower()):
+        tokens.add(token)
+    return tokens
+
+
+def token_set_similarity(left: str, right: str) -> float:
+    """Jaccard overlap of distinctive tokens; robust to garbled duplicates."""
+    left_tokens = _distinctive_tokens(left)
+    right_tokens = _distinctive_tokens(right)
+    if not left_tokens or not right_tokens:
+        return 0.0
+    overlap = len(left_tokens & right_tokens)
+    union = len(left_tokens | right_tokens)
+    return overlap / union
+
+
+def _is_duplicate_ocr_text(left: str, right: str, sequence_limit: float) -> bool:
+    if text_similarity(left, right) >= sequence_limit:
+        return True
+    # Garbled duplicates: character-level similarity collapses under OCR noise,
+    # but the distinctive words/numbers of the same page still overlap heavily.
+    left_tokens = _distinctive_tokens(left)
+    right_tokens = _distinctive_tokens(right)
+    if (
+        len(left_tokens) < settings.ocr_duplicate_min_distinctive_tokens
+        or len(right_tokens) < settings.ocr_duplicate_min_distinctive_tokens
+    ):
+        return False
+    overlap = len(left_tokens & right_tokens) / len(left_tokens | right_tokens)
+    return overlap >= settings.ocr_duplicate_token_overlap
+
+
 def text_similarity(left: str, right: str) -> float:
     a = re.sub(r"\s+", " ", left).strip().lower()
     b = re.sub(r"\s+", " ", right).strip().lower()
@@ -327,7 +376,8 @@ def find_consecutive_near_duplicates(
         if previous.status != "ready" or current.status != "ready":
             continue
         score = text_similarity(previous.raw_text, current.raw_text)
-        if score >= limit:
+        if score >= limit or _is_duplicate_ocr_text(previous.raw_text, current.raw_text, limit):
+            score = max(score, token_set_similarity(previous.raw_text, current.raw_text))
             flags.append((previous.page_id, current.page_id, score))
     return flags
 
@@ -361,8 +411,7 @@ def collapse_ocr_duplicate_pages(
                 continue
             if len(left.raw_text.strip()) < 24 or len(right.raw_text.strip()) < 24:
                 continue
-            score = text_similarity(left.raw_text, right.raw_text)
-            if score < limit:
+            if not _is_duplicate_ocr_text(left.raw_text, right.raw_text, limit):
                 continue
             drop = other if _ocr_page_rank(left, pages[index]) >= _ocr_page_rank(right, pages[other]) else index
             if keep[drop]:
@@ -525,6 +574,14 @@ def _blocks_from_tesseract_data(data: dict) -> list[TextBlock]:
             ]
         if not kept_words:
             continue
+        if avg_conf < settings.ocr_min_confidence:
+            # Low-confidence lines are kept only when they mostly read as words;
+            # this drops fragment lines like "4 on . SY 5 4 /".
+            plausible_count = sum(
+                1 for _, word, _, _, _ in words if _is_plausible_token(word)
+            )
+            if plausible_count < len(words) / 2:
+                continue
         line_text = normalize_ocr_text(" ".join(kept_words))
         if not line_text:
             continue
@@ -589,7 +646,10 @@ def _is_plausible_token(token: str) -> bool:
             return False
         vowel_count = sum(1 for char in letters if char in _VOWELS)
         if vowel_count == 0:
-            return False
+            # Vowel-less words are usually OCR noise, but short all-caps
+            # acronyms (HTTP, XML, PDF...) are legitimate prose.
+            if not (cleaned.isalpha() and cleaned.isupper() and len(cleaned) <= 6):
+                return False
     # Reject long runs of the same character (eeeee, SSSSS).
     if re.search(r"(.)\1{3,}", cleaned, flags=re.IGNORECASE):
         return False

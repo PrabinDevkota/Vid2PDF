@@ -22,6 +22,14 @@ import { PageEditorModal } from "./PageEditorModal";
 
 type ReviewTab = "pages" | "video" | "deleted";
 
+/** Page artifacts are rewritten in place on rotate/edit; bust the browser cache. */
+function withCacheKey(url: string | null, cacheKey: string): string | null {
+  if (!url) {
+    return null;
+  }
+  return `${url}${url.includes("?") ? "&" : "?"}v=${encodeURIComponent(cacheKey)}`;
+}
+
 interface PageReviewBoardProps {
   job: ProcessingJob | null;
   onJobUpdated: (job: ProcessingJob) => void;
@@ -61,13 +69,10 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
   }, [job?.id]);
 
   useEffect(() => {
-    if (visiblePages.length > 0 && activeTab === "video") {
-      return;
+    if (activeTab === "deleted" && deletedPages.length === 0) {
+      setActiveTab("pages");
     }
-    if (deletedPages.length > 0 && activeTab === "deleted") {
-      return;
-    }
-  }, [visiblePages.length, deletedPages.length, activeTab]);
+  }, [deletedPages.length, activeTab]);
 
   function formatTime(seconds: number): string {
     const safeSeconds = Math.max(seconds, 0);
@@ -102,6 +107,27 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
       toast("Page edits saved.", "success");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to save page edits.";
+      setActionError(message);
+      toast(message, "error");
+    } finally {
+      setIsMutating(false);
+    }
+  }
+
+  async function handleRotate(page: ExtractedPage) {
+    if (!job) {
+      return;
+    }
+
+    setIsMutating(true);
+    setActionError(null);
+    try {
+      const updatedJob = await updatePage(job.id, page.id, {
+        rotation: (page.edits.rotation + 90) % 360,
+      });
+      onJobUpdated(updatedJob);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to rotate page.";
       setActionError(message);
       toast(message, "error");
     } finally {
@@ -418,7 +444,10 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
             ) : (
               <div className="page-grid">
                 {visiblePages.map((page, index) => {
-                  const thumbnailUrl = resolveArtifactUrl(page.thumbnailUrl);
+                  const thumbnailUrl = withCacheKey(
+                    resolveArtifactUrl(page.thumbnailUrl),
+                    job.updatedAt,
+                  );
 
                   return (
                     <article
@@ -522,6 +551,16 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                         >
                           <ArrowDown size={14} aria-hidden="true" />
                           <span>Down</span>
+                        </button>
+                        <button
+                          className="icon-button"
+                          disabled={isMutating}
+                          onClick={() => void handleRotate(page)}
+                          title="Rotate 90° clockwise"
+                          type="button"
+                        >
+                          <RotateCw size={14} aria-hidden="true" />
+                          <span>Rotate</span>
                         </button>
                         <button
                           className="icon-button"

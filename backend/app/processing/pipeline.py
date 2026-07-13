@@ -142,7 +142,7 @@ def run_reconstruction_pipeline(
     )
 
     logger.info(
-        "Pipeline finished for job=%s: sampled_frames=%s, segments=%s, selected_pages=%s, deduped_pages=%s",
+        "Pipeline finished for job=%s: sampled_frames=%s, segments=%s, selected_pages=%s, sequence_pages=%s, deduped_pages=%s",
         job_id,
         len(sampled_frames),
         len(segments),

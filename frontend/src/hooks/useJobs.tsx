@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import { fetchJob, fetchJobs } from "../lib/api";
 import type { ProcessingJob } from "../types";
 
@@ -35,7 +35,10 @@ interface JobsContextValue {
 const JobsContext = createContext<JobsContextValue | null>(null);
 
 export function JobsProvider({ children }: { children: ReactNode }) {
-  const { jobId } = useParams();
+  // The provider mounts above <Routes>, so useParams() would always be
+  // empty here; match the review route against the location instead.
+  const location = useLocation();
+  const jobId = matchPath("/review/:jobId", location.pathname)?.params.jobId;
   const navigate = useNavigate();
   const [jobs, setJobs] = useState<ProcessingJob[]>([]);
   const [activeJob, setActiveJob] = useState<ProcessingJob | null>(null);

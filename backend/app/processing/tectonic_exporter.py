@@ -97,6 +97,10 @@ def compile_latex_with_tectonic(
             ],
             capture_output=True,
             text=True,
+            # Tectonic emits UTF-8; Windows would otherwise decode as cp1252
+            # and crash the capture thread on non-ASCII log output.
+            encoding="utf-8",
+            errors="replace",
             check=False,
             timeout=180,
         )

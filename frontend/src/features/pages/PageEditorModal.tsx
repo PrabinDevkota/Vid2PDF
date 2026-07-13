@@ -112,7 +112,9 @@ export function PageEditorModal({
       height: Math.max(1, Math.round(croppedHeight * scale)),
       scale,
     };
-  }, [edits]);
+    // imageReady matters: the memo reads imageRef.current, which is only
+    // populated once the source image finishes loading.
+  }, [edits, imageReady]);
 
   useEffect(() => {
     if (!page || !edits || !imageReady || !canvasRef.current || !imageRef.current) {

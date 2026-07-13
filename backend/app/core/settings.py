@@ -1,9 +1,15 @@
+from pathlib import Path
+
 from pydantic import BaseModel
+
+# Anchor storage to the backend package so artifacts land in the same place
+# no matter which directory uvicorn/pytest is launched from.
+_BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseModel):
     app_name: str = "Vid2PDF"
-    storage_path: str = "backend/data"
+    storage_path: str = str(_BACKEND_ROOT / "data")
     screen_sample_fps: float = 4.0
     screen_stable_segment_min_seconds: float = 0.5
     screen_stable_segment_max_change_ratio: float = 0.008
@@ -49,9 +55,11 @@ class Settings(BaseModel):
     quality_debug_max_rejected_frames: int = 12
     quality_debug_max_kept_pages: int = 12
     public_artifact_base_url: str = "/artifacts"
-    # Absolute paths avoid stale PATH in long-lived uvicorn processes on Windows.
-    tesseract_cmd: str | None = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-    tectonic_cmd: str = r"C:\Users\prabi\AppData\Local\Programs\tectonic\tectonic.exe"
+    # Leave unset to auto-resolve from PATH and standard install locations
+    # (resolve_tesseract_cmd / ensure_tectonic_available probe Program Files
+    # and LOCALAPPDATA); set an absolute path here only to override.
+    tesseract_cmd: str | None = None
+    tectonic_cmd: str = "tectonic"
     ocr_language: str = "eng"
     ocr_min_confidence: float = 35.0
     ocr_soft_confidence: float = 22.0
@@ -75,6 +83,11 @@ class Settings(BaseModel):
     ocr_min_plausible_ratio: float = 0.42
     ocr_consecutive_duplicate_similarity: float = 0.85
     ocr_global_duplicate_similarity: float = 0.88
+    # Garbled duplicates: Jaccard overlap of distinctive tokens (words >= 4
+    # chars and numbers) that marks two OCR pages as the same page even when
+    # character-level similarity is destroyed by OCR noise.
+    ocr_duplicate_token_overlap: float = 0.55
+    ocr_duplicate_min_distinctive_tokens: int = 12
 
 
 settings = Settings()

@@ -31,7 +31,12 @@ from app.processing.deduper import remove_duplicates
 from app.processing.debug import write_pipeline_debug_report
 from app.processing.document import detect_document_region
 from app.processing.editor import write_rendered_page
-from app.processing.ocr import PageText, TextBlock, extract_page_text
+from app.processing.ocr import (
+    PageText,
+    TextBlock,
+    extract_page_text,
+    extract_pages_text_parallel,
+)
 from app.processing.pipeline import (
     PIPELINE_STAGES,
     build_export,
@@ -152,7 +157,10 @@ class JobService:
 
             if needs_rerender and page.source_image_url and page.image_url and page.thumbnail_url:
                 self._render_page_artifacts(page)
-                self._apply_ocr_to_page(page)
+                # Rendering changed the pixels; invalidate OCR rather than
+                # blocking this request on a synchronous Tesseract run. The
+                # next text export re-OCRs any page that is not "ready".
+                self._invalidate_page_ocr(page)
 
             self._invalidate_export(job)
             job.updated_at = datetime.now(timezone.utc)
@@ -180,6 +188,7 @@ class JobService:
                     page.rotation = page.edits.rotation
                     if page.source_image_url and page.image_url and page.thumbnail_url:
                         self._render_page_artifacts(page)
+                        self._invalidate_page_ocr(page)
                 if payload.deleted is not None:
                     page.deleted = payload.deleted
                     page.status = "deleted" if payload.deleted else "active"
@@ -592,10 +601,7 @@ class JobService:
             self._save_jobs()
 
         try:
-            page_texts: list[PageText] = []
-            for index, page in enumerate(active_pages):
-                page_text = self._ensure_page_ocr(page, page_number=index + 1)
-                page_texts.append(page_text)
+            page_texts = self._collect_page_texts(active_pages)
 
             with self._lock:
                 job = self._jobs.get(job_id)
@@ -646,54 +652,56 @@ class JobService:
             job.updated_at = job.text_export.completed_at
             self._save_jobs()
 
-    def _ensure_page_ocr(self, page: Page, *, page_number: int) -> PageText:
-        # Only reuse successful OCR. Re-run empty/failed so improved settings apply.
-        if page.ocr_status == "ready" and page.ocr_text:
-            return PageText(
-                page_id=page.id,
-                page_number=page_number,
-                blocks=[
-                    TextBlock(
-                        text=block.text,
-                        confidence=block.confidence,
-                        top=block.top,
-                        left=block.left,
-                    )
-                    for block in page.ocr_blocks
-                ],
-                raw_text=page.ocr_text,
-                status=page.ocr_status,
-                error=page.ocr_error,
+    def _collect_page_texts(self, active_pages: list[Page]) -> list[PageText]:
+        """Reuse successful OCR; re-run the rest in parallel across pages."""
+        results: list[PageText | None] = [None] * len(active_pages)
+        pending: list[tuple[int, str, str, int]] = []
+
+        for index, page in enumerate(active_pages):
+            page_number = index + 1
+            # Only reuse successful OCR. Re-run empty/failed so improved settings apply.
+            if page.ocr_status == "ready" and page.ocr_text:
+                results[index] = PageText(
+                    page_id=page.id,
+                    page_number=page_number,
+                    blocks=[
+                        TextBlock(
+                            text=block.text,
+                            confidence=block.confidence,
+                            top=block.top,
+                            left=block.left,
+                        )
+                        for block in page.ocr_blocks
+                    ],
+                    raw_text=page.ocr_text,
+                    status=page.ocr_status,
+                    error=page.ocr_error,
+                )
+            elif not page.image_url:
+                results[index] = PageText(
+                    page_id=page.id,
+                    page_number=page_number,
+                    status="failed",
+                    error="Page image is missing for OCR.",
+                )
+            else:
+                image_path = str(self._resolve_storage_path(page.image_url))
+                pending.append((index, image_path, page.id, page_number))
+
+        if pending:
+            ocr_results = extract_pages_text_parallel(
+                [(image_path, page_id, page_number) for _, image_path, page_id, page_number in pending]
             )
+            for (index, _, _, _), result in zip(pending, ocr_results, strict=True):
+                results[index] = result
 
-        if not page.image_url:
-            return PageText(
-                page_id=page.id,
-                page_number=page_number,
-                status="failed",
-                error="Page image is missing for OCR.",
-            )
+        return [item for item in results if item is not None]
 
-        image_path = str(self._resolve_storage_path(page.image_url))
-        return extract_page_text(
-            image_path,
-            page_id=page.id,
-            page_number=page_number,
-        )
-
-    def _apply_ocr_to_page(self, page: Page) -> None:
-        if not page.image_url:
-            page.ocr_status = "failed"
-            page.ocr_error = "Page image is missing for OCR."
-            page.ocr_text = None
-            page.ocr_blocks = []
-            return
-        result = extract_page_text(
-            str(self._resolve_storage_path(page.image_url)),
-            page_id=page.id,
-            page_number=page.page_number,
-        )
-        self._assign_ocr_result(page, result)
+    def _invalidate_page_ocr(self, page: Page) -> None:
+        page.ocr_status = "pending"
+        page.ocr_text = None
+        page.ocr_blocks = []
+        page.ocr_error = None
 
     def _assign_ocr_result(self, page: Page, result: PageText) -> None:
         page.ocr_text = result.raw_text if result.status in {"ready", "empty"} else None

@@ -36,7 +36,6 @@ function getActiveStep(job: ProcessingJob): WorkflowStep {
 function getStepState(
   step: WorkflowStep,
   activeStep: WorkflowStep,
-  job: ProcessingJob,
 ): "complete" | "active" | "pending" {
   const order: WorkflowStep[] = ["upload", "process", "review", "export"];
   const stepIndex = order.indexOf(step);
@@ -45,19 +44,7 @@ function getStepState(
   if (stepIndex < activeIndex) {
     return "complete";
   }
-    if (stepIndex === activeIndex) {
-      if (step === "process" && job.status === "failed") {
-        return "active";
-      }
-      if (
-        step === "export" &&
-        (job.export.status === "failed" || job.textExport?.status === "failed")
-      ) {
-        return "active";
-      }
-      return "active";
-    }
-  return "pending";
+  return stepIndex === activeIndex ? "active" : "pending";
 }
 
 interface WorkflowStepperProps {
@@ -70,7 +57,7 @@ export function WorkflowStepper({ job }: WorkflowStepperProps) {
   return (
     <div className="workflow-stepper">
       {STEPS.map((step, index) => {
-        const state = getStepState(step.key, activeStep, job);
+        const state = getStepState(step.key, activeStep);
         return (
           <div className="workflow-stepper__item" key={step.key}>
             <div className={`workflow-stepper__step workflow-stepper__step--${state}`}>
