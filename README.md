@@ -115,3 +115,13 @@ npm run dev
 - target inputs are screen recordings of digital documents (camera mode also supported)
 - text PDF fidelity prioritizes content completeness over perfect layout recreation
 - job state is persisted to JSON under `backend/data`
+
+## Contributing
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for setup,
+testing, and pull request guidelines. Please also read the
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
+## License
+
+Vid2PDF is open source under the [MIT License](LICENSE).
