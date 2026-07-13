@@ -125,7 +125,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
     setJobs((currentJobs) => currentJobs.filter((item) => item.id !== deletedJobId));
     setActiveJob((current) => (current?.id === deletedJobId ? null : current));
     if (jobId === deletedJobId) {
-      navigate("/");
+      navigate("/app");
     }
   }
 

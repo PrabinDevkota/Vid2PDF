@@ -77,7 +77,7 @@ export function ReviewPage() {
         <div className="empty-state empty-state--large">
           <strong>No session selected</strong>
           <p>Choose a session from the dashboard or upload a new video to begin.</p>
-          <Link className="primary-button" to="/">
+          <Link className="primary-button" to="/app">
             Back to sessions
           </Link>
         </div>

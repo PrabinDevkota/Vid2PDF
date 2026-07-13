@@ -24,7 +24,7 @@ export function AppHeader({
       <div className="app-header__main">
         {job ? (
           <nav className="breadcrumbs" aria-label="Breadcrumb">
-            <Link to="/">Dashboard</Link>
+            <Link to="/app">Sessions</Link>
             <ChevronRight size={14} aria-hidden="true" />
             <span>{job.filename}</span>
           </nav>
