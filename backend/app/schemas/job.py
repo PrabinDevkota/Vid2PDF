@@ -105,6 +105,7 @@ class ExportResponse(BaseModel):
     progressPercent: int
     filename: str | None
     downloadUrl: str | None
+    texUrl: str | None = None
     requestedAt: datetime | None
     completedAt: datetime | None
     error: str | None

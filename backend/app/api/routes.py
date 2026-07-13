@@ -36,6 +36,12 @@ async def upload_job(
     return await job_service.create_job(file, processing_mode)
 
 
+@router.delete("/jobs/{job_id}", status_code=204)
+def delete_job(job_id: str) -> None:
+    if not job_service.delete_job(job_id):
+        raise HTTPException(status_code=404, detail="Job not found")
+
+
 @router.post("/jobs/{job_id}/export", response_model=ExportResponse)
 def export_job(job_id: str) -> ExportResponse:
     export_result = job_service.export_job(job_id)

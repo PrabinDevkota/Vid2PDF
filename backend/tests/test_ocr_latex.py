@@ -176,14 +176,15 @@ def test_build_latex_document_preserves_page_count_and_empty_placeholder() -> No
     ]
     latex = build_latex_document(title="Demo Doc", pages=pages, source_filename="demo.mp4")
     assert r"\begin{document}" in latex
-    assert r"\section*{Page 1}" in latex
-    assert r"\section*{Page 2}" in latex
+    assert r"\pagemarker{1}" in latex
+    assert r"\pagemarker{2}" in latex
     assert r"\newpage" in latex
     assert "Hello from page one" in latex
     assert EMPTY_PAGE_PLACEHOLDER in latex
     assert "Demo Doc" in latex
-    assert r"\definecolor{VidAccent}{HTML}{0F766E}" in latex
-    assert r"\usepackage[dvipsnames,svgnames,table]{xcolor}" in latex
+    assert r"\definecolor{DocAccent}{HTML}{0F766E}" in latex
+    assert r"\usepackage{charter}" in latex
+    assert r"\usepackage{parskip}" in latex
     assert r"\usepackage{titlesec}" in latex
     assert r"\justifying" in latex
     assert r"\usepackage{ragged2e}" in latex
@@ -292,7 +293,7 @@ def test_build_latex_document_colors_headings() -> None:
     ]
     latex = build_latex_document(title="Styled", pages=pages)
     assert r"\subsection*" in latex
-    assert "VidAccent" in latex
+    assert "DocAccent" in latex
 
 
 def test_ensure_pages_from_frames_fallback_when_empty() -> None:

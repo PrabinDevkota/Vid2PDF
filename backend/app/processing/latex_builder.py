@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import re
+from datetime import date
 from pathlib import Path
 
 from app.processing.ocr import PageText, clean_gibberish_text, is_plausible_page_text
 
 EMPTY_PAGE_PLACEHOLDER = "[No text detected on this page]"
-ACCENT = "VidAccent"
-MUTED = "VidMuted"
-RULE = "VidRule"
-WARN = "VidWarn"
+ACCENT = "DocAccent"
+INK = "DocInk"
+MUTED = "DocMuted"
+RULE = "DocRule"
 
 
 def escape_latex(text: str) -> str:
@@ -36,58 +37,69 @@ def build_latex_document(
     pages: list[PageText],
     source_filename: str | None = None,
 ) -> str:
-    """Build a complete LaTeX article from OCR page texts with justified body text."""
+    """
+    Build a clean, editorial-style LaTeX document from OCR page texts.
+
+    Charter body text, quiet small-caps running header, and a thin-rule
+    page marker instead of loud colored section headings.
+    """
     safe_title = escape_latex(title or "Vid2PDF Text Export")
+    header_title = escape_latex(_shorten(title or "Vid2PDF Text Export", 60))
     subtitle = escape_latex(source_filename) if source_filename else None
 
     parts: list[str] = [
         r"\documentclass[11pt]{article}",
-        r"\usepackage[margin=1in]{geometry}",
+        r"\usepackage[a4paper,top=2.6cm,bottom=3.0cm,left=2.7cm,right=2.7cm]{geometry}",
         r"\usepackage[T1]{fontenc}",
-        r"\usepackage{lmodern}",
+        r"\usepackage{charter}",
         r"\usepackage{microtype}",
-        r"\usepackage{setspace}",
+        r"\usepackage{parskip}",
         r"\usepackage{ragged2e}",
-        r"\usepackage{hyperref}",
+        r"\usepackage{xcolor}",
         r"\usepackage{fancyhdr}",
-        r"\usepackage[dvipsnames,svgnames,table]{xcolor}",
         r"\usepackage{titlesec}",
-        r"\definecolor{VidAccent}{HTML}{0F766E}",
-        r"\definecolor{VidMuted}{HTML}{5B6B7A}",
-        r"\definecolor{VidRule}{HTML}{C5D0DC}",
-        r"\definecolor{VidWarn}{HTML}{94610F}",
+        r"\usepackage{hyperref}",
+        rf"\definecolor{{{ACCENT}}}{{HTML}}{{0F766E}}",
+        rf"\definecolor{{{INK}}}{{HTML}}{{1A1F24}}",
+        rf"\definecolor{{{MUTED}}}{{HTML}}{{6B7280}}",
+        rf"\definecolor{{{RULE}}}{{HTML}}{{D8DEE4}}",
+        rf"\hypersetup{{hidelinks,pdftitle={{{safe_title}}}}}",
+        r"\color{" + INK + "}",
         r"\pagestyle{fancy}",
         r"\fancyhf{}",
-        rf"\fancyhead[L]{{\textcolor{{{ACCENT}}}{{\textbf{{{safe_title}}}}}}}",
-        rf"\fancyhead[R]{{\textcolor{{{MUTED}}}{{\thepage}}}}",
-        r"\renewcommand{\headrulewidth}{0.6pt}",
-        rf"\renewcommand{{\headrule}}{{\hbox to\headwidth{{\color{{{ACCENT}}}\leaders\hrule height \headrulewidth\hfill}}}}",
-        rf"\titleformat{{\section}}{{\Large\bfseries\color{{{ACCENT}}}}}{{}}{{0em}}{{}}[\vspace{{0.2em}}{{\color{{{RULE}}}\titlerule}}]",
-        rf"\titleformat{{\subsection}}{{\large\bfseries\color{{{ACCENT}}}}}{{}}{{0em}}{{}}",
+        rf"\fancyhead[L]{{\footnotesize\scshape\color{{{MUTED}}}{header_title}}}",
+        rf"\fancyhead[R]{{\footnotesize\color{{{MUTED}}}\thepage}}",
+        r"\renewcommand{\headrulewidth}{0pt}",
+        r"\setlength{\headsep}{1.6em}",
+        # Small-caps subheadings for detected in-page headings.
+        rf"\titleformat{{\subsection}}{{\normalsize\bfseries\color{{{INK}}}}}{{}}{{0em}}{{}}",
+        r"\titlespacing*{\subsection}{0pt}{1.1em}{0.35em}",
+        # Quiet page marker: small-caps label over a hairline rule.
+        r"\newcommand{\pagemarker}[1]{%",
+        rf"  {{\footnotesize\scshape\color{{{MUTED}}}page~#1}}\\[0.2em]",
+        rf"  {{\color{{{RULE}}}\rule{{\linewidth}}{{0.5pt}}}}\par\vspace{{0.9em}}}}",
         r"\setlength{\parskip}{0.55em}",
-        r"\setlength{\parindent}{1.15em}",
-        r"\onehalfspacing",
         r"\justifying",
         r"\begin{document}",
-        r"\begin{center}",
-        rf"{{\Huge\bfseries\color{{{ACCENT}}} {safe_title}}}\\[0.45em]",
-        rf"{{\large\color{{{MUTED}}} Vid2PDF}}\\[0.7em]",
-        rf"{{\color{{{RULE}}}\rule{{0.65\linewidth}}{{0.9pt}}}}",
-        r"\end{center}",
-        r"\vspace{0.8em}",
+        r"\thispagestyle{empty}",
+        r"\begin{flushleft}",
+        rf"{{\LARGE\bfseries\color{{{INK}}} {safe_title}}}\\[0.6em]",
     ]
     if subtitle:
-        parts.append(
-            rf"\noindent\textcolor{{{MUTED}}}{{\textit{{Source: {subtitle}}}}}"
-        )
-        parts.append(r"\vspace{1.1em}")
+        parts.append(rf"{{\small\color{{{MUTED}}} Source: {subtitle}}}\\[0.25em]")
+    parts.extend(
+        [
+            rf"{{\small\color{{{MUTED}}} Extracted with Vid2PDF · {date.today():%B %d, %Y}}}\\[0.7em]",
+            rf"{{\color{{{ACCENT}}}\rule{{2.4cm}}{{2pt}}}}",
+            r"\end{flushleft}",
+            r"\vspace{1.4em}",
+        ]
+    )
 
     for index, page in enumerate(pages):
         if index > 0:
             parts.append(r"\newpage")
-
-        parts.append(rf"\section*{{Page {page.page_number}}}")
-        parts.append(r"\vspace{0.25em}")
+        parts.append(rf"\pagemarker{{{page.page_number}}}")
         parts.append(_page_body(page))
 
     parts.append(r"\end{document}")
@@ -100,15 +112,22 @@ def write_latex_file(tex_path: Path, latex_source: str) -> Path:
     return tex_path
 
 
+def _shorten(text: str, limit: int) -> str:
+    compact = text.strip()
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 1].rstrip() + "…"
+
+
 def _page_body(page: PageText) -> str:
     if page.status == "failed":
         message = page.error or "OCR failed for this page."
-        return rf"\noindent\textcolor{{{WARN}}}{{\textit{{{escape_latex(message)}}}}}"
+        return rf"\textcolor{{{MUTED}}}{{\itshape {escape_latex(message)}}}"
 
     if page.status == "empty" or not page.raw_text.strip():
         if page.blocks:
             return _format_paragraphs([block.text for block in page.blocks if block.text.strip()])
-        return rf"\noindent\textcolor{{{WARN}}}{{\textit{{{escape_latex(EMPTY_PAGE_PLACEHOLDER)}}}}}"
+        return rf"\textcolor{{{MUTED}}}{{\itshape {escape_latex(EMPTY_PAGE_PLACEHOLDER)}}}"
 
     # Prefer raw_text: it already groups lines into paragraphs by vertical
     # gaps, whereas blocks are individual OCR lines.
@@ -118,7 +137,7 @@ def _page_body(page: PageText) -> str:
 
     paragraphs = _merge_flowing_paragraphs(paragraphs)
     if not paragraphs:
-        return rf"\noindent\textcolor{{{WARN}}}{{\textit{{{escape_latex(EMPTY_PAGE_PLACEHOLDER)}}}}}"
+        return rf"\textcolor{{{MUTED}}}{{\itshape {escape_latex(EMPTY_PAGE_PLACEHOLDER)}}}"
 
     return _format_paragraphs(paragraphs)
 
@@ -163,10 +182,7 @@ def _format_paragraphs(paragraphs: list[str]) -> str:
         if not text:
             continue
         if _looks_like_heading(text):
-            parts.append(
-                rf"\subsection*{{\textcolor{{{ACCENT}}}{{{escape_latex(text)}}}}}"
-            )
-            parts.append(r"\noindent")
+            parts.append(rf"\subsection*{{{escape_latex(text)}}}")
         else:
             parts.append(rf"{escape_latex(text)}\par")
     return "\n\n".join(parts)

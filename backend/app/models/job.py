@@ -114,6 +114,7 @@ class ExportArtifact:
     progress_percent: int = 0
     filename: str | None = None
     download_url: str | None = None
+    tex_url: str | None = None
     requested_at: datetime | None = None
     completed_at: datetime | None = None
     error: str | None = None

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -304,6 +305,34 @@ class JobService:
             job.updated_at = datetime.now(timezone.utc)
             self._save_jobs()
             return self._to_response(job)
+
+    def delete_job(self, job_id: str) -> bool:
+        with self._lock:
+            job = self._jobs.pop(job_id, None)
+            if job is None:
+                return False
+            upload_path = job.upload_path
+            self._save_jobs()
+
+        # Best-effort artifact cleanup outside the lock; state is already gone.
+        job_dir = self._jobs_root / job_id
+        if job_dir.is_dir():
+            shutil.rmtree(job_dir, ignore_errors=True)
+        text_work_dir = self._exports_root / f"{job_id}-text"
+        if text_work_dir.is_dir():
+            shutil.rmtree(text_work_dir, ignore_errors=True)
+        for export_name in (f"{job_id}.pdf", f"{job_id}-text.pdf"):
+            export_path = self._exports_root / export_name
+            if export_path.is_file():
+                export_path.unlink(missing_ok=True)
+        if upload_path:
+            upload_file = Path(upload_path)
+            if upload_file.is_file():
+                try:
+                    upload_file.unlink()
+                except OSError:
+                    pass
+        return True
 
     def export_job(self, job_id: str) -> ExportResponse | None:
         with self._lock:
@@ -647,6 +676,7 @@ class JobService:
             job.text_export.download_url = (
                 f"{settings.public_artifact_base_url}/exports/{artifact.filename}"
             )
+            job.text_export.tex_url = self._artifact_url_for_path(artifact.tex_path)
             job.text_export.completed_at = datetime.now(timezone.utc)
             job.text_export.error = None
             job.updated_at = job.text_export.completed_at
@@ -988,10 +1018,20 @@ class JobService:
             progressPercent=export.progress_percent,
             filename=export.filename,
             downloadUrl=export.download_url,
+            texUrl=export.tex_url,
             requestedAt=export.requested_at,
             completedAt=export.completed_at,
             error=export.error,
         )
+
+    def _artifact_url_for_path(self, file_path: str | None) -> str | None:
+        if not file_path:
+            return None
+        try:
+            relative = Path(file_path).resolve().relative_to(self._storage_root.resolve())
+        except ValueError:
+            return None
+        return f"{settings.public_artifact_base_url}/{relative.as_posix()}"
 
     def _to_page_edits(
         self,
@@ -1314,6 +1354,7 @@ class JobService:
                 "progress_percent": job.text_export.progress_percent,
                 "filename": job.text_export.filename,
                 "download_url": job.text_export.download_url,
+                "tex_url": job.text_export.tex_url,
                 "requested_at": self._serialize_datetime(job.text_export.requested_at),
                 "completed_at": self._serialize_datetime(job.text_export.completed_at),
                 "error": job.text_export.error,
@@ -1400,6 +1441,7 @@ class JobService:
                 progress_percent=int(text_export_payload.get("progress_percent", 0)) if isinstance(text_export_payload, dict) else 0,  # type: ignore[union-attr]
                 filename=text_export_payload.get("filename") if isinstance(text_export_payload, dict) else None,  # type: ignore[arg-type]
                 download_url=text_export_payload.get("download_url") if isinstance(text_export_payload, dict) else None,  # type: ignore[arg-type]
+                tex_url=text_export_payload.get("tex_url") if isinstance(text_export_payload, dict) else None,  # type: ignore[arg-type]
                 requested_at=self._deserialize_datetime(text_export_payload.get("requested_at")) if isinstance(text_export_payload, dict) else None,  # type: ignore[union-attr]
                 completed_at=self._deserialize_datetime(text_export_payload.get("completed_at")) if isinstance(text_export_payload, dict) else None,  # type: ignore[union-attr]
                 error=text_export_payload.get("error") if isinstance(text_export_payload, dict) else None,  # type: ignore[arg-type]
