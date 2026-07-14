@@ -27,6 +27,7 @@ from app.models.job import (
     Stage,
     TextAnnotation,
 )
+from app.processing.cancellation import JobCancelledError
 from app.processing.context import build_pipeline_context
 from app.processing.deduper import remove_duplicates
 from app.processing.debug import write_pipeline_debug_report
@@ -77,6 +78,10 @@ from app.schemas.job import (
     UpdatePageRequest,
     UpdatePageEditsPayload,
 )
+
+
+class JobNotCancellableError(Exception):
+    """Raised when cancellation is requested for a job that already finished."""
 
 
 class JobService:
@@ -185,7 +190,7 @@ class JobService:
     def _run_url_job(self, job_id: str) -> None:
         with self._lock:
             job = self._jobs.get(job_id)
-            if job is None or not job.source_url:
+            if job is None or not job.source_url or job.cancel_requested:
                 return
             source_url = job.source_url
 
@@ -195,8 +200,14 @@ class JobService:
                 source_url,
                 output_dir=str(self._uploads_root),
                 job_id=job_id,
+                should_abort=lambda: self._cancel_requested(job_id),
             )
         except Exception as exc:
+            # yt-dlp may wrap the hook's JobCancelledError in a DownloadError,
+            # so treat any failure after a cancel request as a cancellation.
+            if isinstance(exc, JobCancelledError) or self._cancel_requested(job_id):
+                self._mark_cancelled(job_id)
+                return
             with self._lock:
                 job = self._jobs.get(job_id)
                 if job is None:
@@ -220,6 +231,59 @@ class JobService:
         self._complete_stage(job_id, "download_video", 6, f"Downloaded “{title}”.")
         self._run_pipeline_job(job_id)
 
+    def cancel_job(self, job_id: str) -> JobResponse | None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return None
+            if job.status not in {"queued", "processing"}:
+                raise JobNotCancellableError(f"Job is already {job.status} and cannot be cancelled.")
+
+            job.cancel_requested = True
+            now = datetime.now(timezone.utc)
+            if job.status == "queued":
+                # The worker has not started; mark terminal right away. The
+                # queued executor callable bails out when it sees the flag.
+                job.status = "cancelled"
+                job.completed_at = now
+                job.progress = Progress(percent=100, message="Cancelled before processing started.")
+                job.notes.append("Job cancelled by user before processing started.")
+            else:
+                job.progress = Progress(
+                    percent=job.progress.percent,
+                    message="Cancelling… finishing the current step.",
+                )
+                job.notes.append("Cancellation requested by user.")
+            job.updated_at = now
+            self._save_jobs()
+            return self._to_response(job)
+
+    def _cancel_requested(self, job_id: str) -> bool:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            return job is None or job.cancel_requested
+
+    def _check_cancelled(self, job_id: str) -> None:
+        if self._cancel_requested(job_id):
+            raise JobCancelledError("Job cancelled by user request.")
+
+    def _mark_cancelled(self, job_id: str) -> None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return
+            job.status = "cancelled"
+            job.completed_at = datetime.now(timezone.utc)
+            job.progress = Progress(percent=100, message="Cancelled by user.")
+            job.notes.append("Processing was cancelled by user request.")
+            for stage in job.stages:
+                if stage.status == "processing":
+                    stage.status = "pending"
+                    stage.progress_percent = 0
+            job.current_stage_key = None
+            job.updated_at = job.completed_at
+            self._save_jobs()
+
     def reprocess_job(self, job_id: str, sensitivity: str | None = None) -> JobResponse | None:
         with self._lock:
             job = self._jobs.get(job_id)
@@ -230,6 +294,7 @@ class JobService:
 
             if sensitivity is not None:
                 job.sensitivity = self._sanitize_sensitivity(sensitivity)
+            job.cancel_requested = False
             job.status = "queued"
             job.pages = []
             job.notes = [f"Re-processing with sensitivity: {job.sensitivity}."]
@@ -576,6 +641,13 @@ class JobService:
             job = self._jobs.get(job_id)
             if job is None:
                 return
+            if job.cancel_requested:
+                # Cancelled while still queued; cancel_job already marked it.
+                if job.status != "cancelled":
+                    job.status = "cancelled"
+                    job.updated_at = datetime.now(timezone.utc)
+                    self._save_jobs()
+                return
             job.status = "processing"
             job.started_at = datetime.now(timezone.utc)
             job.updated_at = job.started_at
@@ -606,6 +678,7 @@ class JobService:
                 context=context,
                 metadata=metadata,
                 sample_fps=float(settings_for_mode["sample_fps"]),
+                should_abort=lambda: self._cancel_requested(job_id),
             )
 
             if processing_mode == "camera" and camera_detection_failed(sampled_frames):
@@ -623,6 +696,7 @@ class JobService:
                     context=context,
                     metadata=metadata,
                     sample_fps=float(settings_for_mode["sample_fps"]),
+                    should_abort=lambda: self._cancel_requested(job_id),
                 )
                 with self._lock:
                     job = self._jobs[job_id]
@@ -635,6 +709,7 @@ class JobService:
                 f"Sampled {len(sampled_frames)} frames.",
             )
 
+            self._check_cancelled(job_id)
             self._start_stage(job_id, "detect_segments", "Detecting stable page-view segments.", 28)
             segments = detect_stable_segments(
                 frames=sampled_frames,
@@ -646,6 +721,7 @@ class JobService:
             )
             self._complete_stage(job_id, "detect_segments", 46, f"Detected {len(segments)} stable segments.")
 
+            self._check_cancelled(job_id)
             self._start_stage(job_id, "select_frames", "Selecting the strongest frame from each segment.", 50)
             selected_pages = select_best_frames(segments, processing_mode=processing_mode)
             sequence_pages = collapse_sequence_candidates(selected_pages)
@@ -656,6 +732,7 @@ class JobService:
                 f"Selected {len(selected_pages)} representative frames and collapsed them to {len(sequence_pages)} sequence-stable candidates.",
             )
 
+            self._check_cancelled(job_id)
             self._start_stage(job_id, "remove_duplicates", "Filtering duplicate or weak pages.", 70)
             unique_pages = remove_duplicates(
                 sequence_pages,
@@ -677,6 +754,7 @@ class JobService:
                 f"Kept {len(unique_pages)} pages after deduplication.",
             )
 
+            self._check_cancelled(job_id)
             self._start_stage(job_id, "prepare_previews", "Writing page previews and final page images.", 86)
             preview_pages = attach_previews(unique_pages, context=context)
             self._complete_stage(job_id, "prepare_previews", 90, "Preview artifacts written.")
@@ -689,6 +767,7 @@ class JobService:
                 deduped_pages=preview_pages,
             )
 
+            self._check_cancelled(job_id)
             self._start_stage(job_id, "extract_text", "Extracting text from unique page frames.", 92)
             preview_pages, ocr_results, ocr_notes = ocr_and_collapse_duplicates(
                 preview_pages, lang=ocr_language
@@ -745,6 +824,8 @@ class JobService:
                 job.progress = Progress(percent=100, message="Pages are ready for review.")
                 job.updated_at = job.completed_at
                 self._save_jobs()
+        except JobCancelledError:
+            self._mark_cancelled(job_id)
         except Exception as exc:
             with self._lock:
                 job = self._jobs.get(job_id)
@@ -1574,6 +1655,7 @@ class JobService:
             "source_url": job.source_url,
             "ocr_language": job.ocr_language,
             "sensitivity": job.sensitivity,
+            "cancel_requested": job.cancel_requested,
         }
 
     def _deserialize_job(self, payload: dict[str, object]) -> Job:
@@ -1674,6 +1756,7 @@ class JobService:
             source_url=payload.get("source_url"),  # type: ignore[arg-type]
             ocr_language=sanitize_language(str(payload.get("ocr_language", "eng"))),
             sensitivity=self._sanitize_sensitivity(str(payload.get("sensitivity", "balanced"))),  # type: ignore[arg-type]
+            cancel_requested=bool(payload.get("cancel_requested", False)),
         )
 
     def _serialize_datetime(self, value: datetime | None) -> str | None:

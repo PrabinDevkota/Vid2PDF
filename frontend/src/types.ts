@@ -1,4 +1,4 @@
-export type JobStatus = "queued" | "processing" | "ready" | "failed";
+export type JobStatus = "queued" | "processing" | "ready" | "failed" | "cancelled";
 export type StageStatus = "pending" | "processing" | "complete" | "failed";
 export type PageStatus = "active" | "deleted";
 export type ExportStatus = "idle" | "processing" | "ready" | "failed";

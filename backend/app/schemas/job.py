@@ -124,7 +124,7 @@ class JobResponse(BaseModel):
     sourceUrl: str | None = None
     ocrLanguage: str = "eng"
     sensitivity: Literal["fewer", "balanced", "more"] = "balanced"
-    status: Literal["queued", "processing", "ready", "failed"]
+    status: Literal["queued", "processing", "ready", "failed", "cancelled"]
     createdAt: datetime
     updatedAt: datetime
     startedAt: datetime | None

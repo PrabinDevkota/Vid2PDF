@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 
-JobStatus = Literal["queued", "processing", "ready", "failed"]
+JobStatus = Literal["queued", "processing", "ready", "failed", "cancelled"]
 StageStatus = Literal["pending", "processing", "complete", "failed"]
 PageStatus = Literal["active", "deleted"]
 ExportStatus = Literal["idle", "processing", "ready", "failed"]
@@ -149,3 +149,4 @@ class Job:
     source_url: str | None = None
     ocr_language: str = "eng"
     sensitivity: Sensitivity = "balanced"
+    cancel_requested: bool = False

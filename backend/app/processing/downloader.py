@@ -4,6 +4,9 @@ import logging
 import re
 import shutil
 from pathlib import Path
+from typing import Callable
+
+from app.processing.cancellation import JobCancelledError
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +17,12 @@ def is_valid_video_url(url: str) -> bool:
     return bool(_URL_PATTERN.match(url.strip()))
 
 
-def download_video(url: str, output_dir: str, job_id: str) -> tuple[str, str]:
+def download_video(
+    url: str,
+    output_dir: str,
+    job_id: str,
+    should_abort: Callable[[], bool] | None = None,
+) -> tuple[str, str]:
     """
     Download a video from a URL (YouTube or any yt-dlp-supported site, plus
     direct video links) into the uploads directory.
@@ -44,6 +52,13 @@ def download_video(url: str, output_dir: str, job_id: str) -> tuple[str, str]:
         "max_filesize": 2 * 1024 * 1024 * 1024,  # 2 GB guard
         "restrictfilenames": True,
     }
+    if should_abort is not None:
+
+        def _abort_hook(_status: dict) -> None:
+            if should_abort():
+                raise JobCancelledError("Video download aborted by cancellation request.")
+
+        options["progress_hooks"] = [_abort_hook]
 
     with yt_dlp.YoutubeDL(options) as ydl:
         info = ydl.extract_info(url, download=True)

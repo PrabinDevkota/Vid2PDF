@@ -141,6 +141,14 @@ export async function addManualPage(
   return readJson<ProcessingJob>(response, "Failed to add page from video");
 }
 
+export async function cancelJob(jobId: string): Promise<ProcessingJob> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/cancel`, {
+    method: "POST",
+  });
+
+  return readJson<ProcessingJob>(response, "Failed to cancel processing");
+}
+
 export async function deleteJob(jobId: string): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}`, {
     method: "DELETE",

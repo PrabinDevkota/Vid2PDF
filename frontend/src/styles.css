@@ -724,6 +724,11 @@ input:focus-visible {
   color: var(--danger);
 }
 
+.status-pill--cancelled {
+  background: var(--surface-muted);
+  color: var(--text-faint);
+}
+
 .status-banner,
 .empty-state {
   display: grid;

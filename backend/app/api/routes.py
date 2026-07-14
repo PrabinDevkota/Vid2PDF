@@ -15,7 +15,7 @@ from app.schemas.job import (
     ReprocessJobRequest,
     UpdatePageRequest,
 )
-from app.services.job_service import job_service
+from app.services.job_service import JobNotCancellableError, job_service
 
 router = APIRouter()
 
@@ -69,6 +69,17 @@ def reprocess_job(job_id: str, payload: ReprocessJobRequest) -> JobResponse:
     job = job_service.reprocess_job(job_id, payload.sensitivity)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found or has no stored video")
+    return job
+
+
+@router.post("/jobs/{job_id}/cancel", response_model=JobResponse)
+def cancel_job(job_id: str) -> JobResponse:
+    try:
+        job = job_service.cancel_job(job_id)
+    except JobNotCancellableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
     return job
 
 

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Callable
 
 import cv2
 import numpy as np
 
+from app.processing.cancellation import JobCancelledError
 from app.processing.document import detect_document_region
 from app.processing.scoring import compute_frame_quality
 from app.processing.types import PipelineContext, SampledFrame, VideoMetadata
@@ -37,6 +39,7 @@ def sample_frames(
     context: PipelineContext,
     metadata: VideoMetadata,
     sample_fps: float,
+    should_abort: Callable[[], bool] | None = None,
 ) -> list[SampledFrame]:
     capture = cv2.VideoCapture(context.upload_path)
     if not capture.isOpened():
@@ -55,6 +58,9 @@ def sample_frames(
             break
 
         if frame_index % frame_interval == 0:
+            if should_abort is not None and should_abort():
+                capture.release()
+                raise JobCancelledError("Frame sampling aborted by cancellation request.")
             if context.processing_mode == "camera":
                 detection = detect_document_region(frame)
                 processed_frame = detection.corrected_image

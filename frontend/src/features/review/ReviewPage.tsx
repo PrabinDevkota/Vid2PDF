@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Download, FileCode2, FileSearch, FileText, Loader2 } from "lucide-react";
+import { Download, FileCode2, FileSearch, FileText, Loader2, XCircle } from "lucide-react";
 import { AppHeader } from "../../components/AppHeader";
 import { WorkflowStepper } from "../../components/WorkflowStepper";
 import { useToast } from "../../components/Toast";
 import { PageReviewBoard } from "../pages/PageReviewBoard";
 import { useJobs } from "../../hooks/useJobs";
 import {
+  cancelJob,
   resolveArtifactUrl,
   startExport,
   startSearchableExport,
@@ -41,6 +42,25 @@ export function ReviewPage() {
   const [pendingExport, setPendingExport] = useState<"image" | "text" | "searchable" | null>(
     null,
   );
+  const [cancelling, setCancelling] = useState(false);
+
+  async function runCancel() {
+    if (!activeJob) {
+      return;
+    }
+
+    setCancelling(true);
+    try {
+      const job = await cancelJob(activeJob.id);
+      handleJobUpdated(job);
+      toast("Cancellation requested.", "success");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to cancel processing.";
+      toast(message, "error");
+    } finally {
+      setCancelling(false);
+    }
+  }
 
   async function runExport(kind: "image" | "text" | "searchable") {
     if (!activeJob) {
@@ -104,6 +124,7 @@ export function ReviewPage() {
     { kind: "text", label: "Text PDF", Icon: FileText, state: textExport },
   ];
   const texSourceUrl = resolveArtifactUrl(textExport.texUrl ?? null);
+  const isCancellable = activeJob.status === "queued" || activeJob.status === "processing";
   const failedExports = exports.filter(
     (item) => item.state.status === "failed" && item.state.error,
   );
@@ -117,6 +138,21 @@ export function ReviewPage() {
         isLive={needsPolling(activeJob)}
         actions={
           <div className="review-header-actions">
+            {isCancellable ? (
+              <button
+                className="secondary-button danger-button"
+                disabled={cancelling}
+                onClick={() => void runCancel()}
+                type="button"
+              >
+                {cancelling ? (
+                  <Loader2 size={15} className="spin" aria-hidden="true" />
+                ) : (
+                  <XCircle size={15} aria-hidden="true" />
+                )}
+                Cancel processing
+              </button>
+            ) : null}
             {exports.map(({ kind, label, Icon, state, primary }) => {
               const downloadUrl = resolveArtifactUrl(state.downloadUrl);
               if (state.status === "ready" && downloadUrl) {
