@@ -25,8 +25,18 @@ import {
   updatePage,
 } from "../../lib/api";
 import { PageEditorModal } from "./PageEditorModal";
+import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
 
 type ReviewTab = "pages" | "text" | "video" | "deleted" | "rejected";
+
+const SHORTCUTS: { keys: string; action: string }[] = [
+  { keys: "← / →", action: "Select the previous / next page" },
+  { keys: "R", action: "Rotate the selected page 90°" },
+  { keys: "E or Enter", action: "Edit the selected page" },
+  { keys: "Delete", action: "Remove the selected page" },
+  { keys: "Esc", action: "Clear the selection" },
+  { keys: "?", action: "Show or hide this list" },
+];
 
 /** Page artifacts are rewritten in place on rotate/edit; bust the browser cache. */
 function withCacheKey(url: string | null, cacheKey: string): string | null {
@@ -52,6 +62,8 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
   const [editingPage, setEditingPage] = useState<ExtractedPage | null>(null);
   const [activeTab, setActiveTab] = useState<ReviewTab>("pages");
   const [sensitivity, setSensitivity] = useState<Sensitivity>("balanced");
+  const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const visiblePages = job?.pages.filter((page) => !page.deleted) ?? [];
@@ -269,6 +281,59 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
     }
   }
 
+  const selectedIndex = visiblePages.findIndex((page) => page.id === selectedPageId);
+
+  useKeyboardShortcuts(
+    (event) => {
+      if (editingPage) {
+        return; // the editor modal owns the keyboard
+      }
+      if (event.key === "?") {
+        setShowShortcuts((visible) => !visible);
+        return;
+      }
+      if (event.key === "Escape") {
+        setShowShortcuts(false);
+        setSelectedPageId(null);
+        return;
+      }
+      if (activeTab !== "pages" || visiblePages.length === 0) {
+        return;
+      }
+
+      if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+        event.preventDefault();
+        const step = event.key === "ArrowRight" ? 1 : -1;
+        const nextIndex =
+          selectedIndex < 0
+            ? step > 0
+              ? 0
+              : visiblePages.length - 1
+            : Math.min(Math.max(selectedIndex + step, 0), visiblePages.length - 1);
+        setSelectedPageId(visiblePages[nextIndex].id);
+        return;
+      }
+
+      const selectedPage = selectedIndex >= 0 ? visiblePages[selectedIndex] : null;
+      if (!selectedPage || isMutating) {
+        return;
+      }
+      if (event.key === "r" || event.key === "R") {
+        void handleRotate(selectedPage);
+      } else if (event.key === "e" || event.key === "E" || event.key === "Enter") {
+        event.preventDefault();
+        setEditingPage(selectedPage);
+      } else if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
+        const fallback =
+          visiblePages[selectedIndex + 1] ?? visiblePages[selectedIndex - 1] ?? null;
+        setSelectedPageId(fallback ? fallback.id : null);
+        void handleDelete(selectedPage.id, true);
+      }
+    },
+    Boolean(job),
+  );
+
   if (!job) {
     return null;
   }
@@ -377,7 +442,8 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
             {job.status === "ready" ? (
               <div className="reprocess-bar">
                 <span className="reprocess-bar__hint">
-                  Missing pages or seeing duplicates? Adjust detection and run again.
+                  Missing pages or seeing duplicates? Adjust detection and run again. Press{" "}
+                  <kbd>?</kbd> for keyboard shortcuts.
                 </span>
                 <div className="reprocess-bar__controls">
                   <select
@@ -425,9 +491,12 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
 
                   return (
                     <article
-                      className={`page-card ${draggedPageId === page.id ? "page-card--dragging" : ""}`}
+                      className={`page-card ${draggedPageId === page.id ? "page-card--dragging" : ""} ${
+                        selectedPageId === page.id ? "page-card--selected" : ""
+                      }`}
                       draggable={!isMutating}
                       key={page.id}
+                      onClick={() => setSelectedPageId(page.id)}
                       onDragEnd={() => setDraggedPageId(null)}
                       onDragOver={(event) => event.preventDefault()}
                       onDragStart={() => setDraggedPageId(page.id)}
@@ -785,6 +854,36 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
           </div>
         ) : null}
       </div>
+
+      {showShortcuts ? (
+        <div
+          className="shortcuts-dialog"
+          role="dialog"
+          aria-label="Keyboard shortcuts"
+          onClick={() => setShowShortcuts(false)}
+        >
+          <div className="shortcuts-dialog__panel" onClick={(event) => event.stopPropagation()}>
+            <h3>Keyboard shortcuts</h3>
+            <dl>
+              {SHORTCUTS.map((item) => (
+                <div className="shortcuts-dialog__row" key={item.keys}>
+                  <dt>
+                    <kbd>{item.keys}</kbd>
+                  </dt>
+                  <dd>{item.action}</dd>
+                </div>
+              ))}
+            </dl>
+            <button
+              className="secondary-button"
+              onClick={() => setShowShortcuts(false)}
+              type="button"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <PageEditorModal
         isSaving={isMutating}

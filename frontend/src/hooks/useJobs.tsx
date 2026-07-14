@@ -93,6 +93,11 @@ export function JobsProvider({ children }: { children: ReactNode }) {
 
   // Live updates pushed from the backend; polling below is the fallback.
   useEffect(() => {
+    if (navigator.webdriver) {
+      // Automated browsers (screenshots, e2e) rely on polling; an open SSE
+      // stream keeps their virtual clocks from ever settling.
+      return;
+    }
     return subscribeToJobEvents(
       (job) => {
         setJobs((currentJobs) =>
