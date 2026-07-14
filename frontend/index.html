@@ -16,6 +16,19 @@
     />
   </head>
   <body>
+    <script>
+      // Stamp the stored theme before first paint to avoid a flash.
+      (function () {
+        try {
+          var theme = localStorage.getItem("vid2pdf-theme");
+          if (theme === "dark" || theme === "light") {
+            document.documentElement.setAttribute("data-theme", theme);
+          }
+        } catch (e) {
+          /* storage unavailable; fall back to the OS preference */
+        }
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

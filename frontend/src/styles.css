@@ -48,6 +48,78 @@
 
   --shadow-sm: 0 1px 2px rgba(23, 25, 28, 0.05);
   --shadow-lg: 0 16px 40px rgba(23, 25, 28, 0.16);
+
+  /* Translucent surfaces */
+  --overlay-surface: rgba(255, 255, 255, 0.9);
+  --header-glass: rgba(255, 255, 255, 0.85);
+}
+
+/* Dark theme: applied explicitly via the toggle, or via the OS preference
+   when the user has not chosen ("system"). Keep both blocks in sync. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #121417;
+  --surface: #1a1d21;
+  --surface-muted: #23272c;
+  --border: #2e3338;
+  --border-strong: #454c55;
+  --text: #e8eaed;
+  --text-soft: #aab2bb;
+  --text-faint: #7d858e;
+
+  --accent: #14b8a6;
+  --accent-hover: #2dd4bf;
+  --accent-soft: rgba(45, 212, 191, 0.13);
+  --accent-border: rgba(45, 212, 191, 0.35);
+  --accent-ring: rgba(45, 212, 191, 0.3);
+
+  --success: #58c98b;
+  --success-soft: rgba(88, 201, 139, 0.14);
+  --warning: #d9a44a;
+  --warning-soft: rgba(217, 164, 74, 0.14);
+  --danger: #f07570;
+  --danger-soft: rgba(240, 117, 112, 0.14);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
+
+  --overlay-surface: rgba(26, 29, 33, 0.9);
+  --header-glass: rgba(18, 20, 23, 0.85);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --bg: #121417;
+    --surface: #1a1d21;
+    --surface-muted: #23272c;
+    --border: #2e3338;
+    --border-strong: #454c55;
+    --text: #e8eaed;
+    --text-soft: #aab2bb;
+    --text-faint: #7d858e;
+
+    --accent: #14b8a6;
+    --accent-hover: #2dd4bf;
+    --accent-soft: rgba(45, 212, 191, 0.13);
+    --accent-border: rgba(45, 212, 191, 0.35);
+    --accent-ring: rgba(45, 212, 191, 0.3);
+
+    --success: #58c98b;
+    --success-soft: rgba(88, 201, 139, 0.14);
+    --warning: #d9a44a;
+    --warning-soft: rgba(217, 164, 74, 0.14);
+    --danger: #f07570;
+    --danger-soft: rgba(240, 117, 112, 0.14);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
+
+    --overlay-surface: rgba(26, 29, 33, 0.9);
+    --header-glass: rgba(18, 20, 23, 0.85);
+  }
 }
 
 * {
@@ -526,7 +598,7 @@ input:focus-visible {
   place-content: center;
   gap: var(--space-2);
   border-radius: inherit;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--overlay-surface);
   color: var(--text);
 }
 
@@ -1567,6 +1639,14 @@ input:focus-visible {
   flex-wrap: wrap;
 }
 
+.sidebar-footer {
+  margin-top: auto;
+}
+
+.theme-toggle {
+  width: 100%;
+}
+
 .page-card__label--stacked {
   display: grid;
   gap: 2px;
@@ -1685,7 +1765,7 @@ input:focus-visible {
   top: 0;
   z-index: 10;
   border-bottom: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--header-glass);
   backdrop-filter: blur(10px);
 }
 

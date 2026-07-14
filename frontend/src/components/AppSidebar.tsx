@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { LayoutDashboard, Settings } from "lucide-react";
+import { ThemeToggle } from "./ThemeToggle";
 
 export function AppSidebar() {
   return (
@@ -20,6 +21,9 @@ export function AppSidebar() {
           <span className="nav-item__label">Settings</span>
         </NavLink>
       </nav>
+      <div className="sidebar-footer">
+        <ThemeToggle showLabel />
+      </div>
     </aside>
   );
 }

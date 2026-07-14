@@ -9,6 +9,7 @@ import {
   ScanText,
   Video,
 } from "lucide-react";
+import { ThemeToggle } from "../../components/ThemeToggle";
 
 const FEATURES = [
   {
@@ -70,9 +71,10 @@ export function LandingPage() {
             Vid2PDF
           </div>
           <nav className="landing-nav__links">
+            <ThemeToggle />
             <a
               className="landing-nav__link"
-              href="https://github.com/PrabinDevkota"
+              href="https://github.com/PrabinDevkota/Vid2PDF"
               target="_blank"
               rel="noreferrer"
             >
@@ -106,7 +108,7 @@ export function LandingPage() {
             </Link>
             <a
               className="secondary-button primary-button--large"
-              href="https://github.com/PrabinDevkota"
+              href="https://github.com/PrabinDevkota/Vid2PDF"
               target="_blank"
               rel="noreferrer"
             >
