@@ -1643,6 +1643,23 @@ input:focus-visible {
   margin-top: auto;
 }
 
+.file-chip-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.file-chip--failed {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.file-chip__status {
+  flex-shrink: 0;
+  color: var(--danger);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
 /* Keyboard shortcuts */
 
 .page-card--selected {

@@ -50,10 +50,14 @@ interface UploadPanelProps {
   compact?: boolean;
 }
 
+const MAX_BATCH_FILES = 10;
+
 export function UploadPanel({ onJobCreated, compact }: UploadPanelProps) {
   const { toast } = useToast();
   const [sourceKind, setSourceKind] = useState<SourceKind>("file");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
+  const [failedIndexes, setFailedIndexes] = useState<Set<number>>(new Set());
   const [videoUrl, setVideoUrl] = useState("");
   const [processingMode, setProcessingMode] = useState<ProcessingMode>("screen");
   const [ocrLanguage, setOcrLanguage] = useState("eng");
@@ -86,11 +90,32 @@ export function UploadPanel({ onJobCreated, compact }: UploadPanelProps) {
       });
   }, []);
 
-  function chooseFile(file: File | null) {
-    setSelectedFile(file);
-    if (file) {
-      setError(null);
+  function addFiles(files: FileList | File[] | null) {
+    if (!files || files.length === 0) {
+      return;
     }
+    setSelectedFiles((current) => {
+      const merged = [...current];
+      for (const file of Array.from(files)) {
+        const isDuplicate = merged.some(
+          (item) => item.name === file.name && item.size === file.size,
+        );
+        if (!isDuplicate) {
+          merged.push(file);
+        }
+      }
+      if (merged.length > MAX_BATCH_FILES) {
+        toast(`Up to ${MAX_BATCH_FILES} videos per batch.`, "error");
+      }
+      return merged.slice(0, MAX_BATCH_FILES);
+    });
+    setFailedIndexes(new Set());
+    setError(null);
+  }
+
+  function removeFile(index: number) {
+    setSelectedFiles((current) => current.filter((_, itemIndex) => itemIndex !== index));
+    setFailedIndexes(new Set());
   }
 
   function chooseLanguage(code: string) {
@@ -104,8 +129,8 @@ export function UploadPanel({ onJobCreated, compact }: UploadPanelProps) {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (sourceKind === "file" && !selectedFile) {
-      setError("Choose a video file to start processing.");
+    if (sourceKind === "file" && selectedFiles.length === 0) {
+      setError("Choose one or more video files to start processing.");
       return;
     }
     if (sourceKind === "url" && !/^https?:\/\/\S+$/i.test(videoUrl.trim())) {
@@ -126,41 +151,79 @@ export function UploadPanel({ onJobCreated, compact }: UploadPanelProps) {
 
     setIsSubmitting(true);
     setError(null);
+    const trim = { trimStart, trimEnd };
 
-    try {
-      const trim = { trimStart, trimEnd };
-      const job =
-        sourceKind === "file"
-          ? await uploadVideo(selectedFile!, processingMode, ocrLanguage, trim)
-          : await createJobFromUrl(videoUrl.trim(), processingMode, ocrLanguage, trim);
-      onJobCreated(job);
+    if (sourceKind === "url") {
+      try {
+        const job = await createJobFromUrl(videoUrl.trim(), processingMode, ocrLanguage, trim);
+        onJobCreated(job);
+        toast("Session created — downloading the video.", "success");
+        setVideoUrl("");
+        setTrimStartText("");
+        setTrimEndText("");
+      } catch (submissionError) {
+        const message =
+          submissionError instanceof Error ? submissionError.message : "Upload failed.";
+        setError(message);
+        toast(message, "error");
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
+    // Upload files one at a time; each becomes an independent session.
+    const failed = new Set<number>();
+    let firstJob: ProcessingJob | null = null;
+    let firstError: string | null = null;
+    for (let index = 0; index < selectedFiles.length; index += 1) {
+      setUploadingIndex(index);
+      try {
+        const job = await uploadVideo(selectedFiles[index], processingMode, ocrLanguage, trim);
+        if (!firstJob) {
+          firstJob = job;
+        }
+      } catch (submissionError) {
+        failed.add(index);
+        firstError =
+          firstError ??
+          (submissionError instanceof Error ? submissionError.message : "Upload failed.");
+      }
+    }
+    setUploadingIndex(null);
+    setFailedIndexes(failed);
+    setIsSubmitting(false);
+
+    const succeeded = selectedFiles.length - failed.size;
+    if (succeeded > 0) {
       toast(
-        sourceKind === "file"
+        succeeded === 1
           ? "Session created — processing started."
-          : "Session created — downloading the video.",
+          : `${succeeded} sessions created — processing started.`,
         "success",
       );
-      chooseFile(null);
-      setVideoUrl("");
+    }
+    if (failed.size > 0) {
+      setError(
+        `${failed.size} of ${selectedFiles.length} upload(s) failed` +
+          (firstError ? `: ${firstError}` : "."),
+      );
+    } else {
+      setSelectedFiles([]);
       setTrimStartText("");
       setTrimEndText("");
       if (inputRef.current) {
         inputRef.current.value = "";
       }
-    } catch (submissionError) {
-      const message =
-        submissionError instanceof Error
-          ? submissionError.message
-          : "Upload failed.";
-      setError(message);
-      toast(message, "error");
-    } finally {
-      setIsSubmitting(false);
+    }
+    if (firstJob) {
+      onJobCreated(firstJob);
     }
   }
 
   const canSubmit =
-    !isSubmitting && (sourceKind === "file" ? selectedFile !== null : videoUrl.trim().length > 0);
+    !isSubmitting &&
+    (sourceKind === "file" ? selectedFiles.length > 0 : videoUrl.trim().length > 0);
 
   return (
     <SectionCard
@@ -200,10 +263,11 @@ export function UploadPanel({ onJobCreated, compact }: UploadPanelProps) {
             <input
               accept="video/*"
               className="upload-input-hidden"
+              multiple
               name="file"
               ref={inputRef}
               type="file"
-              onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
+              onChange={(event) => addFiles(event.target.files)}
             />
 
             <div
@@ -220,7 +284,7 @@ export function UploadPanel({ onJobCreated, compact }: UploadPanelProps) {
               onDrop={(event) => {
                 event.preventDefault();
                 setIsDragging(false);
-                chooseFile(event.dataTransfer.files[0] ?? null);
+                addFiles(event.dataTransfer.files);
               }}
               onClick={openFilePicker}
               onKeyDown={(event) => {
@@ -239,26 +303,44 @@ export function UploadPanel({ onJobCreated, compact }: UploadPanelProps) {
                 </div>
               ) : null}
               <Upload size={24} className="upload-dropzone__lucide" aria-hidden="true" />
-              <strong>Drop a video or click to browse</strong>
-              <span className="upload-dropzone__hint">MP4, MOV, WebM</span>
+              <strong>Drop videos or click to browse</strong>
+              <span className="upload-dropzone__hint">
+                MP4, MOV, WebM — up to {MAX_BATCH_FILES} at once
+              </span>
             </div>
 
-            {selectedFile ? (
-              <div className="file-chip">
-                <span className="file-chip__name" title={selectedFile.name}>
-                  {selectedFile.name}
-                </span>
-                <span className="file-chip__size">
-                  {(selectedFile.size / 1024 / 1024).toFixed(1)} MB
-                </span>
-                <button
-                  className="file-chip__remove"
-                  onClick={() => chooseFile(null)}
-                  type="button"
-                  aria-label="Remove file"
-                >
-                  <X size={14} />
-                </button>
+            {selectedFiles.length > 0 ? (
+              <div className="file-chip-list">
+                {selectedFiles.map((file, index) => (
+                  <div
+                    className={`file-chip ${
+                      failedIndexes.has(index) ? "file-chip--failed" : ""
+                    }`}
+                    key={`${file.name}-${file.size}`}
+                  >
+                    {uploadingIndex === index ? (
+                      <Loader2 size={13} className="spin" aria-hidden="true" />
+                    ) : null}
+                    <span className="file-chip__name" title={file.name}>
+                      {file.name}
+                    </span>
+                    <span className="file-chip__size">
+                      {(file.size / 1024 / 1024).toFixed(1)} MB
+                    </span>
+                    {failedIndexes.has(index) ? (
+                      <span className="file-chip__status">failed</span>
+                    ) : null}
+                    <button
+                      className="file-chip__remove"
+                      disabled={isSubmitting}
+                      onClick={() => removeFile(index)}
+                      type="button"
+                      aria-label={`Remove ${file.name}`}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
               </div>
             ) : null}
           </>
@@ -362,8 +444,12 @@ export function UploadPanel({ onJobCreated, compact }: UploadPanelProps) {
             {isSubmitting ? (
               <>
                 <Loader2 size={16} className="spin" aria-hidden="true" />
-                Creating session…
+                {sourceKind === "file" && selectedFiles.length > 1 && uploadingIndex !== null
+                  ? `Uploading ${uploadingIndex + 1} of ${selectedFiles.length}…`
+                  : "Creating session…"}
               </>
+            ) : sourceKind === "file" && selectedFiles.length > 1 ? (
+              `Start ${selectedFiles.length} reconstructions`
             ) : (
               "Start reconstruction"
             )}
