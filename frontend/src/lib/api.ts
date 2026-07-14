@@ -160,6 +160,18 @@ export async function addManualPage(
   return readJson<ProcessingJob>(response, "Failed to add page from video");
 }
 
+export async function restoreRejectedFrame(
+  jobId: string,
+  rejectedId: string,
+): Promise<ProcessingJob> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/jobs/${jobId}/rejected/${rejectedId}/restore`,
+    { method: "POST" },
+  );
+
+  return readJson<ProcessingJob>(response, "Failed to restore the rejected page");
+}
+
 export async function cancelJob(jobId: string): Promise<ProcessingJob> {
   const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/cancel`, {
     method: "POST",

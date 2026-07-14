@@ -105,6 +105,16 @@ class PageResponse(BaseModel):
     ocrError: str | None = None
 
 
+class RejectedFrameResponse(BaseModel):
+    id: str
+    timestamp: float
+    sourceFrameIndex: int
+    reason: str
+    score: float
+    imageUrl: str | None = None
+    thumbnailUrl: str | None = None
+
+
 class ExportResponse(BaseModel):
     status: Literal["idle", "processing", "ready", "failed"]
     progressPercent: int
@@ -136,6 +146,7 @@ class JobResponse(BaseModel):
     notes: list[str]
     stages: list[StageResponse]
     pages: list[PageResponse]
+    rejectedFrames: list[RejectedFrameResponse] = []
     export: ExportResponse
     textExport: ExportResponse
     searchableExport: ExportResponse

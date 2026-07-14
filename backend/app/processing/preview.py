@@ -36,7 +36,7 @@ def attach_previews(
 
         cv2.imwrite(str(source_image_path), output_image)
         cv2.imwrite(str(image_path), output_image)
-        thumbnail_image = _build_thumbnail(output_image)
+        thumbnail_image = build_thumbnail(output_image)
         cv2.imwrite(str(thumbnail_path), thumbnail_image, [int(cv2.IMWRITE_JPEG_QUALITY), 88])
 
         page.image_path = str(image_path)
@@ -50,7 +50,7 @@ def attach_previews(
     return pages
 
 
-def _build_thumbnail(image):
+def build_thumbnail(image):
     height, width = image.shape[:2]
     target_width = 360
     scale = target_width / max(width, 1)

@@ -24,6 +24,7 @@ from app.models.job import (
     PageEdits,
     ProcessingMode,
     Progress,
+    RejectedFrame,
     Stage,
     TextAnnotation,
 )
@@ -52,7 +53,7 @@ from app.processing.pipeline import (
 )
 from app.processing.searchable_exporter import export_searchable_pdf
 from app.processing.page_fallback import FALLBACK_NOTE, ensure_pages_from_frames
-from app.processing.preview import attach_previews
+from app.processing.preview import attach_previews, build_thumbnail
 from app.processing.scoring import compute_frame_quality
 from app.processing.sampler import load_video_metadata, sample_frames
 from app.processing.sequence import collapse_sequence_candidates
@@ -72,6 +73,7 @@ from app.schemas.job import (
     PageResponse,
     PageEditsPayload,
     ProgressResponse,
+    RejectedFrameResponse,
     ReorderPagesRequest,
     StageResponse,
     TextAnnotationPayload,
@@ -314,6 +316,7 @@ class JobService:
             job.cancel_requested = False
             job.status = "queued"
             job.pages = []
+            job.rejected_frames = []
             job.notes = [f"Re-processing with sensitivity: {job.sensitivity}."]
             job.stages = [
                 Stage(key=key, label=label, status="pending") for key, label in PIPELINE_STAGES
@@ -486,6 +489,158 @@ class JobService:
             job.updated_at = datetime.now(timezone.utc)
             self._save_jobs()
             return self._to_response(job)
+
+    _MAX_REJECTED_FRAMES = 20
+
+    def _store_rejected_frames(
+        self,
+        job_id: str,
+        candidates: list[tuple[SelectedPage, str]],
+    ) -> list[RejectedFrame]:
+        """Write the strongest dropped candidates to disk so they can be restored."""
+        rejected_dir = self._jobs_root / job_id / "rejected"
+        shutil.rmtree(rejected_dir, ignore_errors=True)
+        if not candidates:
+            return []
+
+        ordered = sorted(
+            candidates,
+            key=lambda item: item[0].selected_frame.quality.score,
+            reverse=True,
+        )[: self._MAX_REJECTED_FRAMES]
+        rejected_dir.mkdir(parents=True, exist_ok=True)
+
+        stored: list[RejectedFrame] = []
+        for page, reason in ordered:
+            image = page.selected_frame.image
+            if image is None and page.image_path and Path(page.image_path).is_file():
+                image = cv2.imread(page.image_path)
+            if image is None:
+                continue
+            frame_id = f"rej-{uuid4().hex[:8]}"
+            image_name = f"{frame_id}.jpg"
+            thumb_name = f"{frame_id}-thumb.jpg"
+            cv2.imwrite(str(rejected_dir / image_name), image, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+            cv2.imwrite(
+                str(rejected_dir / thumb_name),
+                build_thumbnail(image),
+                [int(cv2.IMWRITE_JPEG_QUALITY), 85],
+            )
+            stored.append(
+                RejectedFrame(
+                    id=frame_id,
+                    timestamp=page.selected_frame.timestamp,
+                    source_frame_index=page.selected_frame.frame_index,
+                    reason=reason,
+                    score=page.selected_frame.quality.score,
+                    image_url=f"{settings.public_artifact_base_url}/jobs/{job_id}/rejected/{image_name}",
+                    thumbnail_url=f"{settings.public_artifact_base_url}/jobs/{job_id}/rejected/{thumb_name}",
+                )
+            )
+        return stored
+
+    def restore_rejected_frame(self, job_id: str, rejected_id: str) -> JobResponse | None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return None
+            rejected = next((item for item in job.rejected_frames if item.id == rejected_id), None)
+            if rejected is None or not rejected.image_url:
+                return None
+            upload_path = job.upload_path or ""
+            processing_mode = job.processing_mode
+            ocr_language = job.ocr_language
+
+        image_path = self._resolve_storage_path(rejected.image_url)
+        image = cv2.imread(str(image_path))
+        if image is None:
+            return None
+
+        quality = compute_frame_quality(
+            image,
+            mode=processing_mode,
+            detection=None,
+            transition_penalty=0.0,
+        )
+        sampled_frame = SampledFrame(
+            timestamp=rejected.timestamp,
+            frame_index=rejected.source_frame_index,
+            image=image,
+            quality=quality,
+            detection=None,
+            change_ratio=0.0,
+        )
+        restored_page = SelectedPage(
+            page_id=f"restored-{uuid4().hex[:8]}",
+            page_number=0,
+            label="Restored page",
+            source_segment_id=f"restored-{rejected.id}",
+            segment_start=rejected.timestamp,
+            segment_end=rejected.timestamp,
+            selected_frame=sampled_frame,
+            image_path="",
+            thumbnail_path="",
+            notes=[f"Restored from rejected pipeline candidates ({rejected.reason})."],
+        )
+        context = build_pipeline_context(
+            job_id=job_id,
+            upload_path=upload_path,
+            processing_mode=processing_mode,
+        )
+        attach_previews([restored_page], context=context)
+        ocr_result = extract_page_text(
+            restored_page.image_path,
+            page_id=restored_page.page_id,
+            page_number=0,
+            lang=ocr_language,
+        )
+
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return None
+            if all(item.id != rejected_id for item in job.rejected_frames):
+                return None
+            job.rejected_frames = [item for item in job.rejected_frames if item.id != rejected_id]
+            next_index = len(job.pages)
+            ocr_result.page_number = next_index + 1
+            job.pages.append(
+                Page(
+                    id=restored_page.page_id,
+                    job_id=job.id,
+                    order_index=next_index,
+                    page_number=next_index + 1,
+                    preview_label=f"Restored page {next_index + 1}",
+                    thumbnail_url=restored_page.preview_url,
+                    image_url=restored_page.image_url,
+                    sharpness_score=restored_page.selected_frame.quality.score,
+                    segment_start=restored_page.segment_start,
+                    segment_end=restored_page.segment_end,
+                    source_frame_index=restored_page.selected_frame.frame_index,
+                    source_timestamp=restored_page.selected_frame.timestamp,
+                    manual=True,
+                    source_image_url=self._build_source_image_url(job.id, restored_page.page_id),
+                    **self._ocr_fields_from_result(ocr_result),
+                )
+            )
+            job.notes.append(
+                f"Restored a page the pipeline had rejected ({rejected.reason.lower()}) "
+                f"from {rejected.timestamp:.2f}s."
+            )
+            self._invalidate_export(job)
+            job.updated_at = datetime.now(timezone.utc)
+            self._save_jobs()
+            response = self._to_response(job)
+
+        # The page now owns fresh artifact copies; drop the rejected originals.
+        for url in (rejected.image_url, rejected.thumbnail_url):
+            if not url:
+                continue
+            try:
+                self._resolve_storage_path(url).unlink(missing_ok=True)
+            except (ValueError, OSError):
+                pass
+        return response
 
     def reorder_pages(self, job_id: str, payload: ReorderPagesRequest) -> JobResponse | None:
         with self._lock:
@@ -754,6 +909,12 @@ class JobService:
             self._start_stage(job_id, "select_frames", "Selecting the strongest frame from each segment.", 50)
             selected_pages = select_best_frames(segments, processing_mode=processing_mode)
             sequence_pages = collapse_sequence_candidates(selected_pages)
+            sequence_ids = {page.page_id for page in sequence_pages}
+            rejected_candidates: list[tuple[SelectedPage, str]] = [
+                (page, "Collapsed as part of a page-turn sequence")
+                for page in selected_pages
+                if page.page_id not in sequence_ids
+            ]
             self._complete_stage(
                 job_id,
                 "select_frames",
@@ -776,6 +937,12 @@ class JobService:
             )
             if used_fallback:
                 pipeline_notes.append(FALLBACK_NOTE)
+            unique_ids = {page.page_id for page in unique_pages}
+            rejected_candidates.extend(
+                (page, "Removed as a visual near-duplicate")
+                for page in sequence_pages
+                if page.page_id not in unique_ids
+            )
             self._complete_stage(
                 job_id,
                 "remove_duplicates",
@@ -798,9 +965,17 @@ class JobService:
 
             self._check_cancelled(job_id)
             self._start_stage(job_id, "extract_text", "Extracting text from unique page frames.", 92)
+            pre_ocr_pages = preview_pages
             preview_pages, ocr_results, ocr_notes = ocr_and_collapse_duplicates(
                 preview_pages, lang=ocr_language
             )
+            kept_ids = {page.page_id for page in preview_pages}
+            rejected_candidates.extend(
+                (page, "Removed after OCR found near-duplicate text")
+                for page in pre_ocr_pages
+                if page.page_id not in kept_ids
+            )
+            stored_rejected = self._store_rejected_frames(job_id, rejected_candidates)
             ready_count = sum(1 for item in ocr_results if item.status == "ready")
             empty_count = sum(1 for item in ocr_results if item.status == "empty")
             failed_count = sum(1 for item in ocr_results if item.status == "failed")
@@ -847,6 +1022,12 @@ class JobService:
                     for note in selected_page.notes:
                         job.notes.append(f"{selected_page.label}: {note}")
 
+                job.rejected_frames = stored_rejected
+                if stored_rejected:
+                    job.notes.append(
+                        f"Kept {len(stored_rejected)} rejected page candidate(s) for review; "
+                        "they can be restored from the Rejected tab."
+                    )
                 job.status = "ready"
                 job.completed_at = datetime.now(timezone.utc)
                 job.current_stage_key = job.stages[-1].key if job.stages else None
@@ -1312,6 +1493,18 @@ class JobService:
                 )
                 for page in pages
             ],
+            rejectedFrames=[
+                RejectedFrameResponse(
+                    id=item.id,
+                    timestamp=item.timestamp,
+                    sourceFrameIndex=item.source_frame_index,
+                    reason=item.reason,
+                    score=item.score,
+                    imageUrl=item.image_url,
+                    thumbnailUrl=item.thumbnail_url,
+                )
+                for item in job.rejected_frames
+            ],
             export=self._to_export_response(job.export),
             textExport=self._to_export_response(job.text_export),
             searchableExport=self._to_export_response(job.searchable_export),
@@ -1689,6 +1882,18 @@ class JobService:
             "cancel_requested": job.cancel_requested,
             "trim_start": job.trim_start,
             "trim_end": job.trim_end,
+            "rejected_frames": [
+                {
+                    "id": item.id,
+                    "timestamp": item.timestamp,
+                    "source_frame_index": item.source_frame_index,
+                    "reason": item.reason,
+                    "score": item.score,
+                    "image_url": item.image_url,
+                    "thumbnail_url": item.thumbnail_url,
+                }
+                for item in job.rejected_frames
+            ],
         }
 
     def _deserialize_job(self, payload: dict[str, object]) -> Job:
@@ -1792,6 +1997,19 @@ class JobService:
             cancel_requested=bool(payload.get("cancel_requested", False)),
             trim_start=float(payload["trim_start"]) if payload.get("trim_start") is not None else None,
             trim_end=float(payload["trim_end"]) if payload.get("trim_end") is not None else None,
+            rejected_frames=[
+                RejectedFrame(
+                    id=str(item["id"]),
+                    timestamp=float(item.get("timestamp", 0.0)),
+                    source_frame_index=int(item.get("source_frame_index", -1)),
+                    reason=str(item.get("reason", "Rejected by the pipeline")),
+                    score=float(item.get("score", 0.0)),
+                    image_url=item.get("image_url"),
+                    thumbnail_url=item.get("thumbnail_url"),
+                )
+                for item in payload.get("rejected_frames", [])  # type: ignore[union-attr]
+                if isinstance(item, dict) and item.get("id")
+            ],
         )
 
     def _serialize_datetime(self, value: datetime | None) -> str | None:

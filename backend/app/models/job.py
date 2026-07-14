@@ -113,6 +113,19 @@ class Page:
 
 
 @dataclass
+class RejectedFrame:
+    """A pipeline-dropped page candidate kept around so users can rescue it."""
+
+    id: str
+    timestamp: float
+    source_frame_index: int
+    reason: str
+    score: float
+    image_url: str | None = None
+    thumbnail_url: str | None = None
+
+
+@dataclass
 class ExportArtifact:
     status: ExportStatus = "idle"
     progress_percent: int = 0
@@ -142,6 +155,7 @@ class Job:
     notes: list[str] = field(default_factory=list)
     stages: list[Stage] = field(default_factory=list)
     pages: list[Page] = field(default_factory=list)
+    rejected_frames: list[RejectedFrame] = field(default_factory=list)
     export: ExportArtifact = field(default_factory=ExportArtifact)
     text_export: ExportArtifact = field(default_factory=ExportArtifact)
     searchable_export: ExportArtifact = field(default_factory=ExportArtifact)

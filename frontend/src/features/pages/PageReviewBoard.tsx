@@ -21,11 +21,12 @@ import {
   reorderPages,
   reprocessJob,
   resolveArtifactUrl,
+  restoreRejectedFrame,
   updatePage,
 } from "../../lib/api";
 import { PageEditorModal } from "./PageEditorModal";
 
-type ReviewTab = "pages" | "text" | "video" | "deleted";
+type ReviewTab = "pages" | "text" | "video" | "deleted" | "rejected";
 
 /** Page artifacts are rewritten in place on rotate/edit; bust the browser cache. */
 function withCacheKey(url: string | null, cacheKey: string): string | null {
@@ -55,6 +56,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
 
   const visiblePages = job?.pages.filter((page) => !page.deleted) ?? [];
   const deletedPages = job?.pages.filter((page) => page.deleted) ?? [];
+  const rejectedFrames = job?.rejectedFrames ?? [];
   const sourceVideoUrl = resolveArtifactUrl(job?.sourceVideoUrl ?? null);
 
   useEffect(() => {
@@ -74,7 +76,10 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
     if (activeTab === "deleted" && deletedPages.length === 0) {
       setActiveTab("pages");
     }
-  }, [deletedPages.length, activeTab]);
+    if (activeTab === "rejected" && rejectedFrames.length === 0) {
+      setActiveTab("pages");
+    }
+  }, [deletedPages.length, rejectedFrames.length, activeTab]);
 
   function formatTime(seconds: number): string {
     const safeSeconds = Math.max(seconds, 0);
@@ -201,6 +206,19 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
     );
     if (ok) {
       toast("Frame added as a new page.", "success");
+    }
+  }
+
+  async function handleRestoreRejected(rejectedId: string) {
+    if (!job) {
+      return;
+    }
+    const ok = await runPageAction(
+      () => restoreRejectedFrame(job.id, rejectedId),
+      "Failed to restore the rejected page.",
+    );
+    if (ok) {
+      toast("Rejected page restored into the session.", "success");
     }
   }
 
@@ -339,6 +357,17 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
               type="button"
             >
               Removed ({deletedPages.length})
+            </button>
+          ) : null}
+          {rejectedFrames.length > 0 ? (
+            <button
+              className={`review-tab ${activeTab === "rejected" ? "review-tab--active" : ""}`}
+              onClick={() => setActiveTab("rejected")}
+              role="tab"
+              aria-selected={activeTab === "rejected"}
+              type="button"
+            >
+              Rejected ({rejectedFrames.length})
             </button>
           ) : null}
         </div>
@@ -703,6 +732,54 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                     </button>
                   </article>
                 ))}
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {activeTab === "rejected" && rejectedFrames.length > 0 ? (
+          <div className="review-tab-panel" role="tabpanel">
+            <div className="deleted-pages-panel">
+              <div className="deleted-pages-panel__header">
+                <p>
+                  The pipeline skipped these frames as duplicates or weak pages. Restore any
+                  that were dropped by mistake.
+                </p>
+              </div>
+              <div className="page-grid">
+                {rejectedFrames.map((frame) => {
+                  const thumbnailUrl = resolveArtifactUrl(frame.thumbnailUrl);
+                  return (
+                    <article className="page-card" key={frame.id}>
+                      <div className="page-card__preview">
+                        {thumbnailUrl ? (
+                          <img
+                            alt={`Rejected frame at ${frame.timestamp.toFixed(1)}s`}
+                            className="page-preview-image"
+                            src={thumbnailUrl}
+                          />
+                        ) : (
+                          <div className="page-placeholder">
+                            <span>{frame.timestamp.toFixed(1)}s</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="page-card__footer">
+                        <div className="page-card__label page-card__label--stacked">
+                          <strong>{frame.timestamp.toFixed(1)}s</strong>
+                          <span className="muted">{frame.reason}</span>
+                        </div>
+                        <button
+                          className="secondary-button"
+                          disabled={isMutating}
+                          onClick={() => void handleRestoreRejected(frame.id)}
+                          type="button"
+                        >
+                          Restore
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             </div>
           </div>

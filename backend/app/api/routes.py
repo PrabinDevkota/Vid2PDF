@@ -165,6 +165,14 @@ def add_manual_page(job_id: str, payload: AddManualPageRequest) -> JobResponse:
     return job
 
 
+@router.post("/jobs/{job_id}/rejected/{rejected_id}/restore", response_model=JobResponse)
+def restore_rejected_frame(job_id: str, rejected_id: str) -> JobResponse:
+    job = job_service.restore_rejected_frame(job_id, rejected_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job or rejected page not found")
+    return job
+
+
 @router.post("/jobs/{job_id}/pages/reorder", response_model=JobResponse)
 def reorder_pages(job_id: str, payload: ReorderPagesRequest) -> JobResponse:
     job = job_service.reorder_pages(job_id, payload)

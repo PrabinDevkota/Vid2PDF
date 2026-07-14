@@ -96,6 +96,16 @@ export interface ExtractedPage {
   ocrError: string | null;
 }
 
+export interface RejectedFrame {
+  id: string;
+  timestamp: number;
+  sourceFrameIndex: number;
+  reason: string;
+  score: number;
+  imageUrl: string | null;
+  thumbnailUrl: string | null;
+}
+
 export interface ExportState {
   status: ExportStatus;
   progressPercent: number;
@@ -127,6 +137,7 @@ export interface ProcessingJob {
   notes: string[];
   stages: ProcessingStage[];
   pages: ExtractedPage[];
+  rejectedFrames?: RejectedFrame[];
   export: ExportState;
   textExport: ExportState;
   searchableExport: ExportState;
