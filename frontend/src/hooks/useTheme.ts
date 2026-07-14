@@ -5,6 +5,12 @@ export type ThemePreference = "light" | "dark" | "system";
 const THEME_KEY = "vid2pdf-theme";
 
 function readStoredTheme(): ThemePreference {
+  // The index.html pre-paint script stamps the attribute from storage or a
+  // ?theme= URL param; trust it so both stay in sync on first render.
+  const stamped = document.documentElement.getAttribute("data-theme");
+  if (stamped === "light" || stamped === "dark") {
+    return stamped;
+  }
   const stored = localStorage.getItem(THEME_KEY);
   return stored === "light" || stored === "dark" ? stored : "system";
 }

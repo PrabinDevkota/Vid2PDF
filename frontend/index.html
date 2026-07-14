@@ -18,9 +18,12 @@
   <body>
     <script>
       // Stamp the stored theme before first paint to avoid a flash.
+      // A ?theme=light|dark URL param wins for this visit (useful for previews).
       (function () {
         try {
-          var theme = localStorage.getItem("vid2pdf-theme");
+          var theme =
+            new URLSearchParams(location.search).get("theme") ||
+            localStorage.getItem("vid2pdf-theme");
           if (theme === "dark" || theme === "light") {
             document.documentElement.setAttribute("data-theme", theme);
           }
