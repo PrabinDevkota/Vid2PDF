@@ -16,6 +16,7 @@ def apply_page_edits(source_image_path: str, edits: PageEdits) -> np.ndarray:
 
     image = _rotate(source, edits.rotation)
     image = _crop(image, edits.crop)
+    image = _apply_filter(image, edits.filter)
     image = _apply_blur_regions(image, edits.blur_regions)
     image = _apply_draw_and_text(image, edits.strokes, edits.texts)
     return image
@@ -66,6 +67,36 @@ def _crop(image: np.ndarray, crop: CropBox | None) -> np.ndarray:
     crop_width = max(1, min(crop.width, width - x))
     crop_height = max(1, min(crop.height, height - y))
     return image[y : y + crop_height, x : x + crop_width]
+
+
+def _apply_filter(image: np.ndarray, page_filter: str) -> np.ndarray:
+    if page_filter == "grayscale":
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+
+    if page_filter == "bw":
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        binary = cv2.adaptiveThreshold(
+            gray,
+            255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,
+            35,
+            15,
+        )
+        return cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
+
+    if page_filter == "enhance":
+        # Illumination correction ("magic color"): divide each channel by its
+        # blurred background so paper turns white and shadows disappear.
+        height, width = image.shape[:2]
+        kernel = max(31, (max(height, width) // 20) | 1)
+        background = cv2.GaussianBlur(image, (kernel, kernel), 0)
+        normalized = cv2.divide(image, background, scale=255)
+        # Mild contrast boost so ink stays dark after normalization.
+        return cv2.convertScaleAbs(normalized, alpha=1.12, beta=-14)
+
+    return image
 
 
 def _apply_blur_regions(image: np.ndarray, regions: list[BlurRegion]) -> np.ndarray:

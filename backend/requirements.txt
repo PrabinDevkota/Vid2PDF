@@ -6,6 +6,8 @@ numpy==2.2.1
 opencv-python==4.10.0.84
 Pillow==11.0.0
 pytesseract==0.3.13
+pypdf==6.14.2
+yt-dlp==2026.7.4
 
 # Test dependencies
 pytest==8.3.4

@@ -31,12 +31,14 @@ from app.processing.context import build_pipeline_context
 from app.processing.deduper import remove_duplicates
 from app.processing.debug import write_pipeline_debug_report
 from app.processing.document import detect_document_region
+from app.processing.downloader import download_video, is_valid_video_url
 from app.processing.editor import write_rendered_page
 from app.processing.ocr import (
     PageText,
     TextBlock,
     extract_page_text,
     extract_pages_text_parallel,
+    sanitize_language,
 )
 from app.processing.pipeline import (
     PIPELINE_STAGES,
@@ -44,8 +46,10 @@ from app.processing.pipeline import (
     build_text_export,
     camera_detection_failed,
     collect_ocr_duplicate_notes,
+    mode_settings,
     ocr_and_collapse_duplicates,
 )
+from app.processing.searchable_exporter import export_searchable_pdf
 from app.processing.page_fallback import FALLBACK_NOTE, ensure_pages_from_frames
 from app.processing.preview import attach_previews
 from app.processing.scoring import compute_frame_quality
@@ -105,6 +109,8 @@ class JobService:
         self,
         file: UploadFile,
         processing_mode: ProcessingMode = "screen",
+        ocr_language: str = "eng",
+        sensitivity: str = "balanced",
     ) -> JobResponse:
         job_id = uuid4().hex[:12]
         created_at = datetime.now(timezone.utc)
@@ -126,6 +132,8 @@ class JobService:
             ],
             stages=stages,
             upload_path=str(upload_path),
+            ocr_language=sanitize_language(ocr_language),
+            sensitivity=self._sanitize_sensitivity(sensitivity),
         )
 
         with self._lock:
@@ -134,6 +142,115 @@ class JobService:
 
         self._executor.submit(self._run_pipeline_job, job_id)
         return self._to_response(job)
+
+    def create_job_from_url(
+        self,
+        url: str,
+        processing_mode: ProcessingMode = "screen",
+        ocr_language: str = "eng",
+        sensitivity: str = "balanced",
+    ) -> JobResponse | None:
+        url = url.strip()
+        if not is_valid_video_url(url):
+            return None
+
+        job_id = uuid4().hex[:12]
+        created_at = datetime.now(timezone.utc)
+        stages = [
+            Stage(key="download_video", label="Download the video from the URL", status="pending"),
+            *(Stage(key=key, label=label, status="pending") for key, label in PIPELINE_STAGES),
+        ]
+        job = Job(
+            id=job_id,
+            filename=url,
+            processing_mode=processing_mode,
+            status="queued",
+            created_at=created_at,
+            updated_at=created_at,
+            progress=Progress(percent=1, message="Queued. The video will be downloaded first."),
+            notes=[f"Job created from URL: {url}"],
+            stages=stages,
+            source_url=url,
+            ocr_language=sanitize_language(ocr_language),
+            sensitivity=self._sanitize_sensitivity(sensitivity),
+        )
+
+        with self._lock:
+            self._jobs[job_id] = job
+            self._save_jobs()
+
+        self._executor.submit(self._run_url_job, job_id)
+        return self._to_response(job)
+
+    def _run_url_job(self, job_id: str) -> None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None or not job.source_url:
+                return
+            source_url = job.source_url
+
+        self._start_stage(job_id, "download_video", "Downloading the video.", 3)
+        try:
+            file_path, title = download_video(
+                source_url,
+                output_dir=str(self._uploads_root),
+                job_id=job_id,
+            )
+        except Exception as exc:
+            with self._lock:
+                job = self._jobs.get(job_id)
+                if job is None:
+                    return
+                job.status = "failed"
+                job.progress = Progress(percent=100, message="Video download failed.")
+                job.notes.append(f"Download error: {exc}")
+                for stage in job.stages:
+                    if stage.status == "processing":
+                        stage.status = "failed"
+                job.updated_at = datetime.now(timezone.utc)
+                self._save_jobs()
+            return
+
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return
+            job.upload_path = file_path
+            job.filename = f"{title}{Path(file_path).suffix}"
+        self._complete_stage(job_id, "download_video", 6, f"Downloaded “{title}”.")
+        self._run_pipeline_job(job_id)
+
+    def reprocess_job(self, job_id: str, sensitivity: str | None = None) -> JobResponse | None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None or not job.upload_path:
+                return None
+            if job.status in {"queued", "processing"}:
+                return self._to_response(job)
+
+            if sensitivity is not None:
+                job.sensitivity = self._sanitize_sensitivity(sensitivity)
+            job.status = "queued"
+            job.pages = []
+            job.notes = [f"Re-processing with sensitivity: {job.sensitivity}."]
+            job.stages = [
+                Stage(key=key, label=label, status="pending") for key, label in PIPELINE_STAGES
+            ]
+            job.current_stage_key = None
+            job.completed_at = None
+            job.progress = Progress(percent=2, message="Queued for re-processing.")
+            self._invalidate_export(job)
+            job.updated_at = datetime.now(timezone.utc)
+            self._save_jobs()
+
+        self._executor.submit(self._run_pipeline_job, job_id)
+        with self._lock:
+            job = self._jobs.get(job_id)
+            return None if job is None else self._to_response(job)
+
+    @staticmethod
+    def _sanitize_sensitivity(sensitivity: str | None) -> str:
+        return sensitivity if sensitivity in {"fewer", "balanced", "more"} else "balanced"
 
     def update_page(self, job_id: str, page_id: str, payload: UpdatePageRequest) -> JobResponse | None:
         with self._lock:
@@ -206,6 +323,7 @@ class JobService:
                 return None
             upload_path = job.upload_path
             processing_mode = job.processing_mode
+            ocr_language = job.ocr_language
 
         frame_index, timestamp, frame = self._extract_video_frame(upload_path, payload.timestampSeconds)
         if frame is None:
@@ -253,6 +371,7 @@ class JobService:
             manual_page.image_path,
             page_id=manual_page.page_id,
             page_number=0,
+            lang=ocr_language,
         )
 
         with self._lock:
@@ -321,7 +440,7 @@ class JobService:
         text_work_dir = self._exports_root / f"{job_id}-text"
         if text_work_dir.is_dir():
             shutil.rmtree(text_work_dir, ignore_errors=True)
-        for export_name in (f"{job_id}.pdf", f"{job_id}-text.pdf"):
+        for export_name in (f"{job_id}.pdf", f"{job_id}-text.pdf", f"{job_id}-searchable.pdf"):
             export_path = self._exports_root / export_name
             if export_path.is_file():
                 export_path.unlink(missing_ok=True)
@@ -376,6 +495,82 @@ class JobService:
         self._executor.submit(self._run_text_export_job, job_id)
         return self._to_export_response(job.text_export)
 
+    def export_searchable_job(self, job_id: str) -> ExportResponse | None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return None
+
+            if job.searchable_export.status == "processing":
+                return self._to_export_response(job.searchable_export)
+
+            now = datetime.now(timezone.utc)
+            job.searchable_export = ExportArtifact(
+                status="processing",
+                progress_percent=5,
+                requested_at=now,
+            )
+            job.updated_at = now
+            self._save_jobs()
+
+        self._executor.submit(self._run_searchable_export_job, job_id)
+        return self._to_export_response(job.searchable_export)
+
+    def _run_searchable_export_job(self, job_id: str) -> None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return
+            active_pages = [
+                page for page in sorted(job.pages, key=lambda item: item.order_index) if not page.deleted
+            ]
+            if not active_pages:
+                job.searchable_export.status = "failed"
+                job.searchable_export.error = "No active pages available for export."
+                job.updated_at = datetime.now(timezone.utc)
+                self._save_jobs()
+                return
+            selected_pages = [self._to_selected_page(page) for page in active_pages]
+            title = Path(job.filename).stem or f"Vid2PDF export {job_id}"
+            ocr_language = job.ocr_language
+            job.searchable_export.progress_percent = 25
+            self._save_jobs()
+
+        try:
+            artifact = export_searchable_pdf(
+                job_id=job_id,
+                pages=selected_pages,
+                output_dir=str(self._exports_root),
+                title=title,
+                lang=ocr_language,
+            )
+        except Exception as exc:
+            with self._lock:
+                job = self._jobs.get(job_id)
+                if job is None:
+                    return
+                job.searchable_export.status = "failed"
+                job.searchable_export.progress_percent = 100
+                job.searchable_export.error = str(exc)
+                job.updated_at = datetime.now(timezone.utc)
+                self._save_jobs()
+            return
+
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return
+            job.searchable_export.status = "ready"
+            job.searchable_export.progress_percent = 100
+            job.searchable_export.filename = artifact.filename
+            job.searchable_export.download_url = (
+                f"{settings.public_artifact_base_url}/exports/{artifact.filename}"
+            )
+            job.searchable_export.completed_at = datetime.now(timezone.utc)
+            job.searchable_export.error = None
+            job.updated_at = job.searchable_export.completed_at
+            self._save_jobs()
+
     def _run_pipeline_job(self, job_id: str) -> None:
         with self._lock:
             job = self._jobs.get(job_id)
@@ -392,6 +587,8 @@ class JobService:
                 job = self._jobs[job_id]
                 upload_path = job.upload_path
                 processing_mode = job.processing_mode
+                sensitivity = job.sensitivity
+                ocr_language = job.ocr_language
             if not upload_path:
                 raise ValueError("Uploaded video path is missing.")
 
@@ -400,7 +597,7 @@ class JobService:
                 upload_path=upload_path,
                 processing_mode=processing_mode,
             )
-            mode_settings = self._pipeline_settings(processing_mode)
+            settings_for_mode = mode_settings(processing_mode, sensitivity)
             pipeline_notes: list[str] = []
 
             self._start_stage(job_id, "sample_frames", "Sampling frames from the uploaded video.", 8)
@@ -408,7 +605,7 @@ class JobService:
             sampled_frames = sample_frames(
                 context=context,
                 metadata=metadata,
-                sample_fps=mode_settings["sample_fps"],
+                sample_fps=float(settings_for_mode["sample_fps"]),
             )
 
             if processing_mode == "camera" and camera_detection_failed(sampled_frames):
@@ -421,11 +618,11 @@ class JobService:
                     upload_path=upload_path,
                     processing_mode="screen",
                 )
-                mode_settings = self._pipeline_settings("screen")
+                settings_for_mode = mode_settings("screen", sensitivity)
                 sampled_frames = sample_frames(
                     context=context,
                     metadata=metadata,
-                    sample_fps=mode_settings["sample_fps"],
+                    sample_fps=float(settings_for_mode["sample_fps"]),
                 )
                 with self._lock:
                     job = self._jobs[job_id]
@@ -441,10 +638,11 @@ class JobService:
             self._start_stage(job_id, "detect_segments", "Detecting stable page-view segments.", 28)
             segments = detect_stable_segments(
                 frames=sampled_frames,
-                min_seconds=mode_settings["min_seconds"],
-                max_change_ratio=mode_settings["max_change_ratio"],
-                hash_distance_threshold=mode_settings["hash_distance_threshold"],
-                mean_diff_threshold=mode_settings["mean_diff_threshold"],
+                min_seconds=float(settings_for_mode["min_seconds"]),
+                max_change_ratio=float(settings_for_mode["max_change_ratio"]),
+                hash_distance_threshold=int(settings_for_mode["hash_distance_threshold"]),
+                mean_diff_threshold=float(settings_for_mode["mean_diff_threshold"]),
+                adaptive_std_scale=float(settings_for_mode["adaptive_std_scale"]),
             )
             self._complete_stage(job_id, "detect_segments", 46, f"Detected {len(segments)} stable segments.")
 
@@ -461,7 +659,7 @@ class JobService:
             self._start_stage(job_id, "remove_duplicates", "Filtering duplicate or weak pages.", 70)
             unique_pages = remove_duplicates(
                 sequence_pages,
-                max_hamming_distance=mode_settings["dedupe_threshold"],
+                max_hamming_distance=int(settings_for_mode["dedupe_threshold"]),
             )
             unique_pages, used_fallback = ensure_pages_from_frames(
                 unique_pages=unique_pages,
@@ -492,7 +690,9 @@ class JobService:
             )
 
             self._start_stage(job_id, "extract_text", "Extracting text from unique page frames.", 92)
-            preview_pages, ocr_results, ocr_notes = ocr_and_collapse_duplicates(preview_pages)
+            preview_pages, ocr_results, ocr_notes = ocr_and_collapse_duplicates(
+                preview_pages, lang=ocr_language
+            )
             ready_count = sum(1 for item in ocr_results if item.status == "ready")
             empty_count = sum(1 for item in ocr_results if item.status == "empty")
             failed_count = sum(1 for item in ocr_results if item.status == "failed")
@@ -577,6 +777,7 @@ class JobService:
                 self._save_jobs()
                 return
             selected_pages = [self._to_selected_page(page) for page in active_pages]
+            title = Path(job.filename).stem or f"Vid2PDF export {job_id}"
             job.export.progress_percent = 35
             self._save_jobs()
 
@@ -585,6 +786,7 @@ class JobService:
                 job_id=job_id,
                 pages=selected_pages,
                 output_dir=str(self._exports_root),
+                title=title,
             )
         except Exception as exc:
             with self._lock:
@@ -626,11 +828,12 @@ class JobService:
                 self._save_jobs()
                 return
             filename = job.filename
+            ocr_language = job.ocr_language
             job.text_export.progress_percent = 20
             self._save_jobs()
 
         try:
-            page_texts = self._collect_page_texts(active_pages)
+            page_texts = self._collect_page_texts(active_pages, lang=ocr_language)
 
             with self._lock:
                 job = self._jobs.get(job_id)
@@ -682,7 +885,7 @@ class JobService:
             job.updated_at = job.text_export.completed_at
             self._save_jobs()
 
-    def _collect_page_texts(self, active_pages: list[Page]) -> list[PageText]:
+    def _collect_page_texts(self, active_pages: list[Page], lang: str | None = None) -> list[PageText]:
         """Reuse successful OCR; re-run the rest in parallel across pages."""
         results: list[PageText | None] = [None] * len(active_pages)
         pending: list[tuple[int, str, str, int]] = []
@@ -720,7 +923,8 @@ class JobService:
 
         if pending:
             ocr_results = extract_pages_text_parallel(
-                [(image_path, page_id, page_number) for _, image_path, page_id, page_number in pending]
+                [(image_path, page_id, page_number) for _, image_path, page_id, page_number in pending],
+                lang=lang,
             )
             for (index, _, _, _), result in zip(pending, ocr_results, strict=True):
                 results[index] = result
@@ -812,25 +1016,6 @@ class JobService:
             job.updated_at = now
             self._save_jobs()
 
-    def _pipeline_settings(self, processing_mode: ProcessingMode) -> dict[str, float | int]:
-        if processing_mode == "camera":
-            return {
-                "sample_fps": settings.camera_sample_fps,
-                "min_seconds": settings.camera_stable_segment_min_seconds,
-                "max_change_ratio": settings.camera_stable_segment_max_change_ratio,
-                "hash_distance_threshold": settings.camera_stable_segment_hash_distance_threshold,
-                "mean_diff_threshold": settings.camera_stable_segment_mean_diff_threshold,
-                "dedupe_threshold": settings.camera_dedupe_max_hash_distance,
-            }
-        return {
-            "sample_fps": settings.screen_sample_fps,
-            "min_seconds": settings.screen_stable_segment_min_seconds,
-            "max_change_ratio": settings.screen_stable_segment_max_change_ratio,
-            "hash_distance_threshold": settings.screen_stable_segment_hash_distance_threshold,
-            "mean_diff_threshold": settings.screen_stable_segment_mean_diff_threshold,
-            "dedupe_threshold": settings.screen_dedupe_max_hash_distance,
-        }
-
     def _recover_interrupted_jobs(self) -> None:
         with self._lock:
             changed = False
@@ -850,6 +1035,10 @@ class JobService:
                 if job.text_export.status == "processing":
                     job.text_export.status = "failed"
                     job.text_export.error = "Text export interrupted by server restart."
+                    changed = True
+                if job.searchable_export.status == "processing":
+                    job.searchable_export.status = "failed"
+                    job.searchable_export.error = "Searchable export interrupted by server restart."
                     changed = True
             if changed:
                 self._save_jobs()
@@ -951,6 +1140,9 @@ class JobService:
             filename=job.filename,
             processingMode=job.processing_mode,
             sourceVideoUrl=self._source_video_url(job),
+            sourceUrl=job.source_url,
+            ocrLanguage=job.ocr_language,
+            sensitivity=job.sensitivity,
             status=job.status,
             createdAt=job.created_at,
             updatedAt=job.updated_at,
@@ -1010,6 +1202,7 @@ class JobService:
             ],
             export=self._to_export_response(job.export),
             textExport=self._to_export_response(job.text_export),
+            searchableExport=self._to_export_response(job.searchable_export),
         )
 
     def _to_export_response(self, export: ExportArtifact) -> ExportResponse:
@@ -1039,6 +1232,7 @@ class JobService:
     ) -> PageEdits:
         return PageEdits(
             rotation=payload.rotation % 360,
+            filter=payload.filter,
             crop=None
             if payload.crop is None
             else CropBox(
@@ -1092,6 +1286,7 @@ class JobService:
 
         return PageEditsPayload(
             rotation=edits.rotation,
+            filter=edits.filter,
             crop=crop,
             strokes=[
                 DrawStrokePayload(
@@ -1129,6 +1324,7 @@ class JobService:
     def _serialize_page_edits(self, edits: PageEdits) -> dict[str, object]:
         return {
             "rotation": edits.rotation,
+            "filter": edits.filter,
             "crop": None
             if edits.crop is None
             else {
@@ -1225,8 +1421,13 @@ class JobService:
                 )
             )
 
+        stored_filter = payload.get("filter", "none")
+        if stored_filter not in {"none", "enhance", "grayscale", "bw"}:
+            stored_filter = "none"
+
         return PageEdits(
             rotation=int(payload.get("rotation", 0)) % 360,
+            filter=stored_filter,  # type: ignore[arg-type]
             crop=crop,
             strokes=strokes,
             texts=texts,
@@ -1259,6 +1460,7 @@ class JobService:
     def _invalidate_export(self, job: Job) -> None:
         job.export = ExportArtifact()
         job.text_export = ExportArtifact()
+        job.searchable_export = ExportArtifact()
 
     def _save_jobs(self) -> None:
         payload = {"jobs": [self._serialize_job(job) for job in self._jobs.values()]}
@@ -1359,13 +1561,26 @@ class JobService:
                 "completed_at": self._serialize_datetime(job.text_export.completed_at),
                 "error": job.text_export.error,
             },
+            "searchable_export": {
+                "status": job.searchable_export.status,
+                "progress_percent": job.searchable_export.progress_percent,
+                "filename": job.searchable_export.filename,
+                "download_url": job.searchable_export.download_url,
+                "requested_at": self._serialize_datetime(job.searchable_export.requested_at),
+                "completed_at": self._serialize_datetime(job.searchable_export.completed_at),
+                "error": job.searchable_export.error,
+            },
             "upload_path": job.upload_path,
+            "source_url": job.source_url,
+            "ocr_language": job.ocr_language,
+            "sensitivity": job.sensitivity,
         }
 
     def _deserialize_job(self, payload: dict[str, object]) -> Job:
         progress_payload = payload.get("progress", {})
         export_payload = payload.get("export", {})
         text_export_payload = payload.get("text_export", {})
+        searchable_payload = payload.get("searchable_export", {})
         return Job(
             id=str(payload["id"]),
             filename=str(payload["filename"]),
@@ -1446,7 +1661,19 @@ class JobService:
                 completed_at=self._deserialize_datetime(text_export_payload.get("completed_at")) if isinstance(text_export_payload, dict) else None,  # type: ignore[union-attr]
                 error=text_export_payload.get("error") if isinstance(text_export_payload, dict) else None,  # type: ignore[arg-type]
             ),
+            searchable_export=ExportArtifact(
+                status=searchable_payload.get("status", "idle") if isinstance(searchable_payload, dict) else "idle",  # type: ignore[arg-type]
+                progress_percent=int(searchable_payload.get("progress_percent", 0)) if isinstance(searchable_payload, dict) else 0,  # type: ignore[union-attr]
+                filename=searchable_payload.get("filename") if isinstance(searchable_payload, dict) else None,  # type: ignore[arg-type]
+                download_url=searchable_payload.get("download_url") if isinstance(searchable_payload, dict) else None,  # type: ignore[arg-type]
+                requested_at=self._deserialize_datetime(searchable_payload.get("requested_at")) if isinstance(searchable_payload, dict) else None,  # type: ignore[union-attr]
+                completed_at=self._deserialize_datetime(searchable_payload.get("completed_at")) if isinstance(searchable_payload, dict) else None,  # type: ignore[union-attr]
+                error=searchable_payload.get("error") if isinstance(searchable_payload, dict) else None,  # type: ignore[arg-type]
+            ),
             upload_path=payload.get("upload_path"),  # type: ignore[arg-type]
+            source_url=payload.get("source_url"),  # type: ignore[arg-type]
+            ocr_language=sanitize_language(str(payload.get("ocr_language", "eng"))),
+            sensitivity=self._sanitize_sensitivity(str(payload.get("sensitivity", "balanced"))),  # type: ignore[arg-type]
         )
 
     def _serialize_datetime(self, value: datetime | None) -> str | None:

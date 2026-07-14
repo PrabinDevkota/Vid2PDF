@@ -2,17 +2,30 @@ from typing import Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
+from app.core.settings import settings
+from app.processing.ocr import get_available_languages
 from app.schemas.job import (
     AddManualPageRequest,
     BulkUpdatePagesRequest,
+    CreateJobFromUrlRequest,
     ExportResponse,
     JobResponse,
+    OcrLanguagesResponse,
     ReorderPagesRequest,
+    ReprocessJobRequest,
     UpdatePageRequest,
 )
 from app.services.job_service import job_service
 
 router = APIRouter()
+
+
+@router.get("/ocr/languages", response_model=OcrLanguagesResponse)
+def list_ocr_languages() -> OcrLanguagesResponse:
+    return OcrLanguagesResponse(
+        languages=get_available_languages(),
+        default=settings.ocr_language,
+    )
 
 
 @router.get("/jobs", response_model=list[JobResponse])
@@ -32,8 +45,31 @@ def get_job(job_id: str) -> JobResponse:
 async def upload_job(
     file: UploadFile = File(...),
     processing_mode: Literal["screen", "camera"] = Form("screen"),
+    ocr_language: str = Form("eng"),
+    sensitivity: Literal["fewer", "balanced", "more"] = Form("balanced"),
 ) -> JobResponse:
-    return await job_service.create_job(file, processing_mode)
+    return await job_service.create_job(file, processing_mode, ocr_language, sensitivity)
+
+
+@router.post("/jobs/from-url", response_model=JobResponse)
+def create_job_from_url(payload: CreateJobFromUrlRequest) -> JobResponse:
+    job = job_service.create_job_from_url(
+        payload.url,
+        processing_mode=payload.processingMode,
+        ocr_language=payload.ocrLanguage,
+        sensitivity=payload.sensitivity,
+    )
+    if job is None:
+        raise HTTPException(status_code=400, detail="Enter a valid http(s) video URL.")
+    return job
+
+
+@router.post("/jobs/{job_id}/reprocess", response_model=JobResponse)
+def reprocess_job(job_id: str, payload: ReprocessJobRequest) -> JobResponse:
+    job = job_service.reprocess_job(job_id, payload.sensitivity)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found or has no stored video")
+    return job
 
 
 @router.delete("/jobs/{job_id}", status_code=204)
@@ -53,6 +89,14 @@ def export_job(job_id: str) -> ExportResponse:
 @router.post("/jobs/{job_id}/export/text", response_model=ExportResponse)
 def export_text_job(job_id: str) -> ExportResponse:
     export_result = job_service.export_text_job(job_id)
+    if export_result is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return export_result
+
+
+@router.post("/jobs/{job_id}/export/searchable", response_model=ExportResponse)
+def export_searchable_job(job_id: str) -> ExportResponse:
+    export_result = job_service.export_searchable_job(job_id)
     if export_result is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return export_result

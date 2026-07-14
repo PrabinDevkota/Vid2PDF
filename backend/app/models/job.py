@@ -55,10 +55,14 @@ class BlurRegion:
     intensity: int = 18
 
 
+PageFilter = Literal["none", "enhance", "grayscale", "bw"]
+
+
 @dataclass
 class PageEdits:
     rotation: int = 0
     crop: CropBox | None = None
+    filter: PageFilter = "none"
     strokes: list[DrawStroke] = field(default_factory=list)
     texts: list[TextAnnotation] = field(default_factory=list)
     blur_regions: list[BlurRegion] = field(default_factory=list)
@@ -120,6 +124,9 @@ class ExportArtifact:
     error: str | None = None
 
 
+Sensitivity = Literal["fewer", "balanced", "more"]
+
+
 @dataclass
 class Job:
     id: str
@@ -137,4 +144,8 @@ class Job:
     pages: list[Page] = field(default_factory=list)
     export: ExportArtifact = field(default_factory=ExportArtifact)
     text_export: ExportArtifact = field(default_factory=ExportArtifact)
+    searchable_export: ExportArtifact = field(default_factory=ExportArtifact)
     upload_path: str | None = None
+    source_url: str | None = None
+    ocr_language: str = "eng"
+    sensitivity: Sensitivity = "balanced"

@@ -17,6 +17,7 @@ import type {
   EditPoint,
   ExtractedPage,
   PageEdits,
+  PageFilter,
   TextAnnotation,
 } from "../../types";
 
@@ -168,10 +169,11 @@ export function PageEditorModal({
 
   function transformEdits(nextRotation: number, nextCrop: CropBox | null): PageEdits {
     // Rotation/crop change the coordinate space annotations were placed in,
-    // so they cannot be carried over.
+    // so they cannot be carried over. The filter is coordinate-free and kept.
     return {
       rotation: nextRotation,
       crop: nextCrop,
+      filter: edits?.filter ?? "none",
       strokes: [],
       texts: [],
       blurRegions: [],
@@ -376,6 +378,34 @@ export function PageEditorModal({
               ) : null}
             </div>
 
+            <div className="editor-control-group">
+              <span className="editor-group-label">Cleanup filter</span>
+              <div className="editor-toolbar editor-toolbar--icons">
+                {(
+                  [
+                    ["none", "Original"],
+                    ["enhance", "Enhance"],
+                    ["grayscale", "Grayscale"],
+                    ["bw", "B&W"],
+                  ] as [PageFilter, string][]
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    className={`secondary-button editor-tool-btn ${edits.filter === value ? "is-active" : ""}`}
+                    onClick={() => setEdits({ ...edits, filter: value })}
+                    type="button"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {edits.filter === "enhance" ? (
+                <p className="editor-note">
+                  Preview is approximate; the export whitens the background properly.
+                </p>
+              ) : null}
+            </div>
+
             {tool === "crop" && edits.crop ? (
               <div className="editor-control-group">
                 <span className="editor-group-label">Crop</span>
@@ -459,7 +489,10 @@ export function PageEditorModal({
               <span className="editor-group-label">Applied</span>
               <div className="editor-stats">
                 <span>Rotation {edits.rotation}°</span>
-                <span>{edits.crop ? "Cropped" : "No crop"}</span>
+                <span>
+                  {edits.crop ? "Cropped" : "No crop"}
+                  {edits.filter !== "none" ? ` · ${edits.filter} filter` : ""}
+                </span>
                 <span>
                   {edits.strokes.length} drawing{edits.strokes.length === 1 ? "" : "s"} ·{" "}
                   {edits.texts.length} text · {edits.blurRegions.length} blur
@@ -497,7 +530,14 @@ export function PageEditorModal({
               <button
                 className="secondary-button danger-button"
                 onClick={() =>
-                  setEdits({ rotation: 0, crop: null, strokes: [], texts: [], blurRegions: [] })
+                  setEdits({
+                    rotation: 0,
+                    crop: null,
+                    filter: "none",
+                    strokes: [],
+                    texts: [],
+                    blurRegions: [],
+                  })
                 }
                 type="button"
               >
@@ -648,6 +688,8 @@ function buildPreviewCanvas(
     crop.height,
   );
 
+  applyFilterPreview(croppedCtx, croppedCanvas.width, croppedCanvas.height, edits.filter);
+
   for (const region of edits.blurRegions) {
     const tempCanvas = document.createElement("canvas");
     tempCanvas.width = region.width;
@@ -705,6 +747,35 @@ function buildPreviewCanvas(
   }
 
   return croppedCanvas;
+}
+
+function applyFilterPreview(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  filter: PageFilter,
+) {
+  if (filter === "none" || width < 1 || height < 1) {
+    return;
+  }
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const luminance = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    if (filter === "grayscale") {
+      data[i] = data[i + 1] = data[i + 2] = luminance;
+    } else if (filter === "bw") {
+      const value = luminance > 160 ? 255 : 0;
+      data[i] = data[i + 1] = data[i + 2] = value;
+    } else {
+      // "enhance" approximation: raise contrast and push paper toward white.
+      for (let channel = 0; channel < 3; channel += 1) {
+        const boosted = (data[i + channel] - 128) * 1.25 + 148;
+        data[i + channel] = Math.max(0, Math.min(255, boosted));
+      }
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
 }
 
 function drawStroke(context: CanvasRenderingContext2D, stroke: DrawStroke) {

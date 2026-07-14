@@ -4,6 +4,8 @@ export type PageStatus = "active" | "deleted";
 export type ExportStatus = "idle" | "processing" | "ready" | "failed";
 export type ProcessingMode = "screen" | "camera";
 export type OcrStatus = "pending" | "ready" | "failed" | "empty";
+export type PageFilter = "none" | "enhance" | "grayscale" | "bw";
+export type Sensitivity = "fewer" | "balanced" | "more";
 
 export interface EditPoint {
   x: number;
@@ -42,6 +44,7 @@ export interface BlurRegion {
 export interface PageEdits {
   rotation: number;
   crop: CropBox | null;
+  filter: PageFilter;
   strokes: DrawStroke[];
   texts: TextAnnotation[];
   blurRegions: BlurRegion[];
@@ -109,6 +112,9 @@ export interface ProcessingJob {
   filename: string;
   processingMode: ProcessingMode;
   sourceVideoUrl: string | null;
+  sourceUrl?: string | null;
+  ocrLanguage?: string;
+  sensitivity?: Sensitivity;
   status: JobStatus;
   createdAt: string;
   updatedAt: string;
@@ -121,4 +127,5 @@ export interface ProcessingJob {
   pages: ExtractedPage[];
   export: ExportState;
   textExport: ExportState;
+  searchableExport: ExportState;
 }

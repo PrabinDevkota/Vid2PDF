@@ -102,6 +102,30 @@ def configure_tesseract() -> None:
     _TESSERACT_CONFIGURED = True
 
 
+_LANGUAGE_PATTERN = re.compile(r"^[a-zA-Z_]{3,32}(\+[a-zA-Z_]{3,32})*$")
+
+
+def sanitize_language(lang: str | None) -> str:
+    """Return a safe Tesseract language spec, falling back to the default."""
+    if not lang:
+        return settings.ocr_language
+    lang = lang.strip()
+    if not _LANGUAGE_PATTERN.match(lang):
+        return settings.ocr_language
+    return lang
+
+
+def get_available_languages() -> list[str]:
+    """Installed Tesseract language packs (falls back to the default)."""
+    try:
+        configure_tesseract()
+        languages = pytesseract.get_languages(config="")
+    except Exception:  # pragma: no cover - depends on system tesseract
+        return [settings.ocr_language]
+    filtered = sorted(lang for lang in languages if lang != "osd")
+    return filtered or [settings.ocr_language]
+
+
 def preprocess_for_ocr(image: Image.Image, *, variant: str = "clahe") -> Image.Image:
     """OCR-friendly preprocess variants: CLAHE (default), adaptive binary, or Otsu."""
     if not settings.ocr_preprocess_enabled:
@@ -156,6 +180,7 @@ def extract_page_text(
     *,
     page_id: str,
     page_number: int,
+    lang: str | None = None,
 ) -> PageText:
     """OCR a single page image into ordered text blocks."""
     try:
@@ -179,7 +204,7 @@ def extract_page_text(
 
     try:
         original = Image.open(path)
-        best = _best_ocr_result(original)
+        best = _best_ocr_result(original, lang=sanitize_language(lang))
         blocks = best["blocks"]
         raw_text = best["raw_text"]
     except Exception as exc:  # pragma: no cover - depends on system tesseract
@@ -211,6 +236,7 @@ def extract_page_text(
 
 def extract_pages_text_parallel(
     jobs: list[tuple[str, str, int]],
+    lang: str | None = None,
 ) -> list[PageText]:
     """
     OCR many pages in parallel.
@@ -222,7 +248,9 @@ def extract_pages_text_parallel(
         return []
     if len(jobs) == 1:
         image_path, page_id, page_number = jobs[0]
-        return [extract_page_text(image_path, page_id=page_id, page_number=page_number)]
+        return [
+            extract_page_text(image_path, page_id=page_id, page_number=page_number, lang=lang)
+        ]
 
     workers = settings.ocr_workers
     if workers <= 0:
@@ -237,6 +265,7 @@ def extract_pages_text_parallel(
                 image_path,
                 page_id=page_id,
                 page_number=page_number,
+                lang=lang,
             ): index
             for index, (image_path, page_id, page_number) in enumerate(jobs)
         }
@@ -299,11 +328,21 @@ def clean_gibberish_text(text: str) -> str:
     return " ".join(kept).strip()
 
 
+def _is_non_latin(char: str) -> bool:
+    # Beyond Latin Extended-B — Devanagari, CJK, Arabic, Cyrillic, etc.
+    return ord(char) > 0x024F
+
+
 def is_plausible_page_text(text: str) -> bool:
     """Reject pages that are mostly OCR noise."""
     compact = re.sub(r"\s+", " ", text).strip()
     if len(compact) < 8:
         return False
+    letters = [char for char in compact if char.isalpha()]
+    # The vowel/gibberish heuristics below are tuned for Latin scripts; for
+    # non-Latin text (Devanagari, CJK, ...) trust Tesseract's own filtering.
+    if letters and sum(1 for char in letters if _is_non_latin(char)) / len(letters) > 0.3:
+        return True
     tokens = [token for token in compact.split() if token]
     if not tokens:
         return False
@@ -311,7 +350,6 @@ def is_plausible_page_text(text: str) -> bool:
     ratio = plausible / len(tokens)
     if ratio < settings.ocr_min_plausible_ratio:
         return False
-    letters = [char for char in compact if char.isalpha()]
     if len(letters) < 6:
         return False
     vowel_ratio = sum(1 for char in letters if char in _VOWELS) / len(letters)
@@ -335,7 +373,7 @@ def _distinctive_tokens(text: str) -> set[str]:
     """Tokens that survive OCR garbling: page-specific words (>=4 chars) and numbers."""
     return {
         token
-        for token in re.findall(r"[a-z]{4,}|\d+", text.lower())
+        for token in re.findall(r"[^\W\d_]{4,}|\d+", text.lower())
         if token not in _OCR_STOPWORDS
     }
 
@@ -459,7 +497,7 @@ def _ocr_page_rank(ocr: PageText, page) -> float:
     return confidence + (quality * 40.0) + min(len(ocr.raw_text), 800) * 0.02
 
 
-def _best_ocr_result(original: Image.Image) -> dict:
+def _best_ocr_result(original: Image.Image, lang: str | None = None) -> dict:
     """
     Fast cascade: one good pass usually wins; only escalate when quality is poor.
 
@@ -476,7 +514,7 @@ def _best_ocr_result(original: Image.Image) -> dict:
     # Pass 1: fast CLAHE + primary PSM(s)
     clahe = preprocess_for_ocr(original, variant="clahe")
     for psm in primary_psms:
-        candidate = _ocr_pass(clahe, psm=psm)
+        candidate = _ocr_pass(clahe, psm=psm, lang=lang)
         score = _score_ocr_candidate(candidate)
         if score > best_score:
             best_score = score
@@ -488,7 +526,7 @@ def _best_ocr_result(original: Image.Image) -> dict:
     for psm in fallback_psms:
         if psm in primary_psms:
             continue
-        candidate = _ocr_pass(clahe, psm=psm)
+        candidate = _ocr_pass(clahe, psm=psm, lang=lang)
         score = _score_ocr_candidate(candidate)
         if score > best_score:
             best_score = score
@@ -500,7 +538,7 @@ def _best_ocr_result(original: Image.Image) -> dict:
     if best_score < accept_score:
         for variant in ("adaptive", "otsu"):
             processed = preprocess_for_ocr(original, variant=variant)
-            candidate = _ocr_pass(processed, psm=primary_psms[0])
+            candidate = _ocr_pass(processed, psm=primary_psms[0], lang=lang)
             score = _score_ocr_candidate(candidate)
             if score > best_score:
                 best_score = score
@@ -525,12 +563,12 @@ def _score_ocr_candidate(candidate: dict) -> float:
     return (avg_conf * 0.55) + (plausible * 35.0) + (length_bonus * 20.0)
 
 
-def _ocr_pass(image: Image.Image, *, psm: int) -> dict:
+def _ocr_pass(image: Image.Image, *, psm: int, lang: str | None = None) -> dict:
     """Single Tesseract invocation via image_to_data (no duplicate image_to_string)."""
     config = f"--oem {settings.ocr_oem} --psm {psm}"
     data = pytesseract.image_to_data(
         image,
-        lang=settings.ocr_language,
+        lang=sanitize_language(lang),
         config=config,
         output_type=pytesseract.Output.DICT,
     )
@@ -642,6 +680,9 @@ def _join_blocks(blocks: list[TextBlock]) -> str:
 
 
 def _is_plausible_token(token: str) -> bool:
+    # Latin-centric noise heuristics do not apply to other scripts.
+    if any(_is_non_latin(char) for char in token if char.isalpha()):
+        return True
     cleaned = re.sub(r"^[^\w]+|[^\w]+$", "", token)
     # Keep standalone currency/math punctuation that appears in real prose.
     if token in {"&", "%", "$", "#", "+", "=", "/", ":", ";"}:

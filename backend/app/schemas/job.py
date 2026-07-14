@@ -38,9 +38,13 @@ class BlurRegionPayload(BaseModel):
     intensity: int
 
 
+PageFilterLiteral = Literal["none", "enhance", "grayscale", "bw"]
+
+
 class PageEditsPayload(BaseModel):
     rotation: int
     crop: CropBoxPayload | None
+    filter: PageFilterLiteral = "none"
     strokes: list[DrawStrokePayload]
     texts: list[TextAnnotationPayload]
     blurRegions: list[BlurRegionPayload]
@@ -49,6 +53,7 @@ class PageEditsPayload(BaseModel):
 class UpdatePageEditsPayload(BaseModel):
     rotation: int = 0
     crop: CropBoxPayload | None = None
+    filter: PageFilterLiteral = "none"
     strokes: list[DrawStrokePayload] = []
     texts: list[TextAnnotationPayload] = []
     blurRegions: list[BlurRegionPayload] = []
@@ -116,6 +121,9 @@ class JobResponse(BaseModel):
     filename: str
     processingMode: Literal["screen", "camera"]
     sourceVideoUrl: str | None
+    sourceUrl: str | None = None
+    ocrLanguage: str = "eng"
+    sensitivity: Literal["fewer", "balanced", "more"] = "balanced"
     status: Literal["queued", "processing", "ready", "failed"]
     createdAt: datetime
     updatedAt: datetime
@@ -128,6 +136,7 @@ class JobResponse(BaseModel):
     pages: list[PageResponse]
     export: ExportResponse
     textExport: ExportResponse
+    searchableExport: ExportResponse
 
 
 class UpdatePageRequest(BaseModel):
@@ -148,3 +157,19 @@ class AddManualPageRequest(BaseModel):
 
 class ReorderPagesRequest(BaseModel):
     orderedPageIds: list[str]
+
+
+class CreateJobFromUrlRequest(BaseModel):
+    url: str
+    processingMode: Literal["screen", "camera"] = "screen"
+    ocrLanguage: str = "eng"
+    sensitivity: Literal["fewer", "balanced", "more"] = "balanced"
+
+
+class ReprocessJobRequest(BaseModel):
+    sensitivity: Literal["fewer", "balanced", "more"] | None = None
+
+
+class OcrLanguagesResponse(BaseModel):
+    languages: list[str]
+    default: str

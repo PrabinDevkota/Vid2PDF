@@ -16,11 +16,11 @@ const STEPS: StepDef[] = [
 ];
 
 function getActiveStep(job: ProcessingJob): WorkflowStep {
+  const exportStates = [job.export, job.textExport, job.searchableExport];
   if (
-    job.export.status === "ready" ||
-    job.export.status === "processing" ||
-    job.textExport?.status === "ready" ||
-    job.textExport?.status === "processing"
+    exportStates.some(
+      (state) => state?.status === "ready" || state?.status === "processing",
+    )
   ) {
     return "export";
   }
@@ -68,7 +68,8 @@ export function WorkflowStepper({ job }: WorkflowStepperProps) {
                   (job.status === "processing" ||
                     job.status === "queued" ||
                     job.export.status === "processing" ||
-                    job.textExport?.status === "processing") ? (
+                    job.textExport?.status === "processing" ||
+                    job.searchableExport?.status === "processing") ? (
                   <Loader2 size={14} className="spin" />
                 ) : (
                   <Circle size={10} />

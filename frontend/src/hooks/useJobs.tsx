@@ -16,7 +16,8 @@ function needsPolling(job: ProcessingJob | null): boolean {
     job?.status === "queued" ||
     job?.status === "processing" ||
     job?.export.status === "processing" ||
-    job?.textExport?.status === "processing"
+    job?.textExport?.status === "processing" ||
+    job?.searchableExport?.status === "processing"
   );
 }
 

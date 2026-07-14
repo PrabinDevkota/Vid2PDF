@@ -13,7 +13,13 @@ class ExportArtifact:
     page_count: int
 
 
-def export_pdf(job_id: str, pages: list[SelectedPage], output_dir: str) -> ExportArtifact:
+def export_pdf(
+    job_id: str,
+    pages: list[SelectedPage],
+    output_dir: str,
+    *,
+    title: str | None = None,
+) -> ExportArtifact:
     if not pages:
         raise ValueError("Cannot export a PDF with no pages.")
 
@@ -33,6 +39,8 @@ def export_pdf(job_id: str, pages: list[SelectedPage], output_dir: str) -> Expor
             save_all=True,
             append_images=images[1:],
             resolution=150,
+            title=title or f"Vid2PDF export {job_id}",
+            creator="Vid2PDF",
         )
     finally:
         for image in images:

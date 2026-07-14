@@ -41,9 +41,15 @@ class PipelineResult:
     context: PipelineContext
 
 
-def _mode_settings(processing_mode: str) -> dict[str, float | int]:
+# How aggressively segmentation splits the video into pages. "more" lowers
+# every splitting threshold (more, possibly duplicated pages); "fewer" raises
+# them (fewer, safer pages).
+SENSITIVITY_FACTORS: dict[str, float] = {"fewer": 1.6, "balanced": 1.0, "more": 0.55}
+
+
+def mode_settings(processing_mode: str, sensitivity: str = "balanced") -> dict[str, float | int]:
     if processing_mode == "camera":
-        return {
+        base: dict[str, float | int] = {
             "sample_fps": settings.camera_sample_fps,
             "min_seconds": settings.camera_stable_segment_min_seconds,
             "max_change_ratio": settings.camera_stable_segment_max_change_ratio,
@@ -51,14 +57,27 @@ def _mode_settings(processing_mode: str) -> dict[str, float | int]:
             "mean_diff_threshold": settings.camera_stable_segment_mean_diff_threshold,
             "dedupe_threshold": settings.camera_dedupe_max_hash_distance,
         }
-    return {
-        "sample_fps": settings.screen_sample_fps,
-        "min_seconds": settings.screen_stable_segment_min_seconds,
-        "max_change_ratio": settings.screen_stable_segment_max_change_ratio,
-        "hash_distance_threshold": settings.screen_stable_segment_hash_distance_threshold,
-        "mean_diff_threshold": settings.screen_stable_segment_mean_diff_threshold,
-        "dedupe_threshold": settings.screen_dedupe_max_hash_distance,
-    }
+    else:
+        base = {
+            "sample_fps": settings.screen_sample_fps,
+            "min_seconds": settings.screen_stable_segment_min_seconds,
+            "max_change_ratio": settings.screen_stable_segment_max_change_ratio,
+            "hash_distance_threshold": settings.screen_stable_segment_hash_distance_threshold,
+            "mean_diff_threshold": settings.screen_stable_segment_mean_diff_threshold,
+            "dedupe_threshold": settings.screen_dedupe_max_hash_distance,
+        }
+
+    factor = SENSITIVITY_FACTORS.get(sensitivity, 1.0)
+    base["adaptive_std_scale"] = factor
+    base["min_seconds"] = float(base["min_seconds"]) * factor
+    base["max_change_ratio"] = float(base["max_change_ratio"]) * factor
+    base["mean_diff_threshold"] = float(base["mean_diff_threshold"]) * factor
+    if sensitivity == "more":
+        base["sample_fps"] = float(base["sample_fps"]) * 1.5
+        base["dedupe_threshold"] = max(1, int(base["dedupe_threshold"]) - 1)
+    elif sensitivity == "fewer":
+        base["dedupe_threshold"] = int(base["dedupe_threshold"]) + 2
+    return base
 
 
 def camera_detection_failed(sampled_frames: list) -> bool:
@@ -73,13 +92,14 @@ def run_reconstruction_pipeline(
     job_id: str,
     upload_path: str,
     processing_mode: str,
+    sensitivity: str = "balanced",
 ) -> PipelineResult:
     context = build_pipeline_context(
         job_id=job_id,
         upload_path=upload_path,
         processing_mode=processing_mode,
     )
-    mode = _mode_settings(context.processing_mode)
+    mode = mode_settings(context.processing_mode, sensitivity)
     notes: list[str] = []
 
     metadata = load_video_metadata(upload_path)
@@ -98,7 +118,7 @@ def run_reconstruction_pipeline(
             upload_path=upload_path,
             processing_mode="screen",
         )
-        mode = _mode_settings("screen")
+        mode = mode_settings("screen", sensitivity)
         sampled_frames = sample_frames(
             context=context,
             metadata=metadata,
@@ -111,6 +131,7 @@ def run_reconstruction_pipeline(
         max_change_ratio=float(mode["max_change_ratio"]),
         hash_distance_threshold=int(mode["hash_distance_threshold"]),
         mean_diff_threshold=float(mode["mean_diff_threshold"]),
+        adaptive_std_scale=float(mode["adaptive_std_scale"]),
     )
     selected_pages = select_best_frames(
         segments,
@@ -168,8 +189,13 @@ def run_reconstruction_pipeline(
     )
 
 
-def build_export(job_id: str, pages: list[SelectedPage], output_dir: str) -> ExportArtifact:
-    return export_pdf(job_id=job_id, pages=pages, output_dir=output_dir)
+def build_export(
+    job_id: str,
+    pages: list[SelectedPage],
+    output_dir: str,
+    title: str | None = None,
+) -> ExportArtifact:
+    return export_pdf(job_id=job_id, pages=pages, output_dir=output_dir, title=title)
 
 
 def build_text_export(
@@ -189,20 +215,21 @@ def build_text_export(
     )
 
 
-def ocr_selected_pages(pages: list[SelectedPage]) -> list[PageText]:
+def ocr_selected_pages(pages: list[SelectedPage], lang: str | None = None) -> list[PageText]:
     """OCR each unique selected page image, in parallel across CPU cores."""
     jobs = [
         (page.image_path, page.page_id, page.page_number)
         for page in pages
     ]
-    return extract_pages_text_parallel(jobs)
+    return extract_pages_text_parallel(jobs, lang=lang)
 
 
 def ocr_and_collapse_duplicates(
     pages: list[SelectedPage],
+    lang: str | None = None,
 ) -> tuple[list[SelectedPage], list[PageText], list[str]]:
     """OCR pages, then drop near-duplicate OCR pages keeping the sharper copy."""
-    ocr_results = ocr_selected_pages(pages)
+    ocr_results = ocr_selected_pages(pages, lang=lang)
     collapsed_pages, collapsed_ocr, removed = collapse_ocr_duplicate_pages(pages, ocr_results)
     notes = collect_ocr_duplicate_notes(collapsed_ocr)
     if removed:

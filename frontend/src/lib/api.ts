@@ -1,4 +1,4 @@
-import type { PageEdits, ProcessingJob, ProcessingMode } from "../types";
+import type { PageEdits, ProcessingJob, ProcessingMode, Sensitivity } from "../types";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ||
@@ -29,10 +29,12 @@ export async function fetchJob(jobId: string): Promise<ProcessingJob> {
 export async function uploadVideo(
   file: File,
   processingMode: ProcessingMode,
+  ocrLanguage = "eng",
 ): Promise<ProcessingJob> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("processing_mode", processingMode);
+  formData.append("ocr_language", ocrLanguage);
 
   const response = await fetch(`${API_BASE_URL}/api/jobs/upload`, {
     method: "POST",
@@ -40,6 +42,42 @@ export async function uploadVideo(
   });
 
   return readJson<ProcessingJob>(response, "Failed to upload video");
+}
+
+export async function createJobFromUrl(
+  url: string,
+  processingMode: ProcessingMode,
+  ocrLanguage = "eng",
+): Promise<ProcessingJob> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/from-url`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ url, processingMode, ocrLanguage }),
+  });
+
+  return readJson<ProcessingJob>(response, "Failed to import video from URL");
+}
+
+export async function fetchOcrLanguages(): Promise<{ languages: string[]; default: string }> {
+  const response = await fetch(`${API_BASE_URL}/api/ocr/languages`);
+  return readJson(response, "Failed to load OCR languages");
+}
+
+export async function reprocessJob(
+  jobId: string,
+  sensitivity: Sensitivity,
+): Promise<ProcessingJob> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/reprocess`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ sensitivity }),
+  });
+
+  return readJson<ProcessingJob>(response, "Failed to re-process session");
 }
 
 export async function updatePage(
@@ -129,6 +167,19 @@ export async function startTextExport(jobId: string): Promise<ProcessingJob["tex
   });
 
   return readJson<ProcessingJob["textExport"]>(response, "Failed to start text export");
+}
+
+export async function startSearchableExport(
+  jobId: string,
+): Promise<ProcessingJob["searchableExport"]> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/export/searchable`, {
+    method: "POST",
+  });
+
+  return readJson<ProcessingJob["searchableExport"]>(
+    response,
+    "Failed to start searchable export",
+  );
 }
 
 export function resolveArtifactUrl(url: string | null): string | null {

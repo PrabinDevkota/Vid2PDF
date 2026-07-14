@@ -2,20 +2,24 @@ import { useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  ClipboardCopy,
+  Download,
   FileText,
   GripVertical,
   Loader2,
   Pencil,
+  RefreshCw,
   RotateCw,
   Trash2,
 } from "lucide-react";
-import type { ExtractedPage, PageEdits, ProcessingJob } from "../../types";
+import type { ExtractedPage, PageEdits, ProcessingJob, Sensitivity } from "../../types";
 import { SectionCard } from "../../components/SectionCard";
 import { useToast } from "../../components/Toast";
 import {
   addManualPage,
   bulkUpdatePages,
   reorderPages,
+  reprocessJob,
   resolveArtifactUrl,
   updatePage,
 } from "../../lib/api";
@@ -46,6 +50,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [editingPage, setEditingPage] = useState<ExtractedPage | null>(null);
   const [activeTab, setActiveTab] = useState<ReviewTab>("pages");
+  const [sensitivity, setSensitivity] = useState<Sensitivity>("balanced");
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const visiblePages = job?.pages.filter((page) => !page.deleted) ?? [];
@@ -58,11 +63,12 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
     setVideoDuration(0);
     setIsVideoReady(false);
     setActiveTab("pages");
+    setSensitivity(job?.sensitivity ?? "balanced");
     if (videoRef.current) {
       videoRef.current.pause();
       videoRef.current.currentTime = 0;
     }
-  }, [job?.id]);
+  }, [job?.id, job?.sensitivity]);
 
   useEffect(() => {
     if (activeTab === "deleted" && deletedPages.length === 0) {
@@ -198,6 +204,53 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
     }
   }
 
+  async function handleReprocess() {
+    if (!job) {
+      return;
+    }
+    const ok = await runPageAction(
+      () => reprocessJob(job.id, sensitivity),
+      "Failed to re-process the session.",
+    );
+    if (ok) {
+      toast("Re-processing started with new detection settings.", "success");
+    }
+  }
+
+  function collectExtractedText(): string {
+    if (!job) {
+      return "";
+    }
+    return visiblePages
+      .map((page, index) => {
+        const heading = `--- Page ${index + 1} ---`;
+        if (page.ocrStatus === "ready" && page.ocrText) {
+          return `${heading}\n${page.ocrText}`;
+        }
+        return `${heading}\n[no text]`;
+      })
+      .join("\n\n");
+  }
+
+  function handleDownloadText() {
+    const blob = new Blob([collectExtractedText()], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${job?.filename.replace(/\.[^.]+$/, "") || "vid2pdf"}-text.txt`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleCopyText() {
+    try {
+      await navigator.clipboard.writeText(collectExtractedText());
+      toast("Extracted text copied to clipboard.", "success");
+    } catch {
+      toast("Could not access the clipboard.", "error");
+    }
+  }
+
   if (!job) {
     return null;
   }
@@ -292,6 +345,35 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
 
         {activeTab === "pages" ? (
           <div className="review-tab-panel" role="tabpanel">
+            {job.status === "ready" ? (
+              <div className="reprocess-bar">
+                <span className="reprocess-bar__hint">
+                  Missing pages or seeing duplicates? Adjust detection and run again.
+                </span>
+                <div className="reprocess-bar__controls">
+                  <select
+                    aria-label="Page detection sensitivity"
+                    className="select-input"
+                    disabled={isMutating}
+                    value={sensitivity}
+                    onChange={(event) => setSensitivity(event.target.value as Sensitivity)}
+                  >
+                    <option value="fewer">Fewer pages</option>
+                    <option value="balanced">Balanced</option>
+                    <option value="more">More pages</option>
+                  </select>
+                  <button
+                    className="secondary-button"
+                    disabled={isMutating}
+                    onClick={() => void handleReprocess()}
+                    type="button"
+                  >
+                    <RefreshCw size={14} aria-hidden="true" />
+                    Re-process
+                  </button>
+                </div>
+              </div>
+            ) : null}
             {job.status !== "ready" && visiblePages.length === 0 ? (
               <div className="page-grid-skeleton" aria-label="Processing pages">
                 <span />
@@ -436,6 +518,24 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
               </div>
             ) : (
               <div className="ocr-text-list">
+                <div className="review-toolbar">
+                  <button
+                    className="secondary-button"
+                    onClick={() => void handleCopyText()}
+                    type="button"
+                  >
+                    <ClipboardCopy size={14} aria-hidden="true" />
+                    Copy all
+                  </button>
+                  <button
+                    className="secondary-button"
+                    onClick={handleDownloadText}
+                    type="button"
+                  >
+                    <Download size={14} aria-hidden="true" />
+                    Download .txt
+                  </button>
+                </div>
                 {visiblePages.map((page, index) => (
                   <article className="ocr-text-card" key={page.id}>
                     <header>
@@ -623,6 +723,7 @@ function hasEdits(page: ExtractedPage): boolean {
   return (
     page.edits.rotation !== 0 ||
     page.edits.crop !== null ||
+    (page.edits.filter ?? "none") !== "none" ||
     page.edits.strokes.length > 0 ||
     page.edits.texts.length > 0 ||
     page.edits.blurRegions.length > 0

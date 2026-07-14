@@ -16,6 +16,7 @@ def detect_stable_segments(
     max_change_ratio: float = 0.045,
     hash_distance_threshold: int = 10,
     mean_diff_threshold: float = 0.012,
+    adaptive_std_scale: float = 1.0,
 ) -> list[StableSegment]:
     if not frames:
         return []
@@ -44,17 +45,19 @@ def detect_stable_segments(
         segment = _build_segment(frames, min_seconds, 1, 1)
         return [segment] if segment is not None else []
 
+    # adaptive_std_scale < 1 makes splitting more eager (more pages),
+    # > 1 makes it stricter (fewer pages).
     adaptive_score_threshold = max(
         max_change_ratio,
-        float(np.mean(transition_scores) + (np.std(transition_scores) * 0.9)),
+        float(np.mean(transition_scores) + (np.std(transition_scores) * 0.9 * adaptive_std_scale)),
     )
     adaptive_hash_threshold = max(
         hash_distance_threshold,
-        int(np.percentile(hash_distances, 75)),
+        int(np.percentile(hash_distances, 75) * adaptive_std_scale),
     )
     adaptive_mean_diff_threshold = max(
         mean_diff_threshold,
-        float(np.mean(mean_diffs) + (np.std(mean_diffs) * 0.75)),
+        float(np.mean(mean_diffs) + (np.std(mean_diffs) * 0.75 * adaptive_std_scale)),
     )
     sample_spacing = _median_sample_spacing(frames)
     min_frames_per_segment = max(1, int(round(min_seconds / max(sample_spacing, 0.001))))
