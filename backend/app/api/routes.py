@@ -40,8 +40,9 @@ def stream_job_events() -> StreamingResponse:
             yield ": connected\n\n"
             while True:
                 try:
-                    payload = subscriber.get(timeout=15.0)
-                    yield f"data: {payload}\n\n"
+                    # Queue items are complete SSE frames (job updates and
+                    # named "deleted" events).
+                    yield subscriber.get(timeout=15.0)
                 except queue.Empty:
                     yield ": keepalive\n\n"
         finally:

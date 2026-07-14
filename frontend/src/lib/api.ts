@@ -224,6 +224,7 @@ export async function startSearchableExport(
 export function subscribeToJobEvents(
   onJob: (job: ProcessingJob) => void,
   onHealthChange?: (healthy: boolean) => void,
+  onJobDeleted?: (jobId: string) => void,
 ): () => void {
   const source = new EventSource(`${API_BASE_URL}/api/events`);
   source.onopen = () => onHealthChange?.(true);
@@ -235,6 +236,16 @@ export function subscribeToJobEvents(
       // Malformed event; the polling fallback keeps state fresh.
     }
   };
+  source.addEventListener("deleted", (event) => {
+    try {
+      const payload = JSON.parse((event as MessageEvent).data) as { id?: string };
+      if (payload.id) {
+        onJobDeleted?.(payload.id);
+      }
+    } catch {
+      // Malformed event; ignore.
+    }
+  });
   return () => source.close();
 }
 

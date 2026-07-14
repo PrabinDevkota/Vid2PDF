@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import queue
 import shutil
 from concurrent.futures import ThreadPoolExecutor
@@ -81,6 +82,9 @@ from app.schemas.job import (
     UpdatePageRequest,
     UpdatePageEditsPayload,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class JobNotCancellableError(Exception):
@@ -690,6 +694,7 @@ class JobService:
                     upload_file.unlink()
                 except OSError:
                     pass
+        self._publish_deleted(job_id)
         return True
 
     def export_job(self, job_id: str) -> ExportResponse | None:
@@ -977,7 +982,13 @@ class JobService:
                 for page in pre_ocr_pages
                 if page.page_id not in kept_ids
             )
-            stored_rejected = self._store_rejected_frames(job_id, rejected_candidates)
+            try:
+                stored_rejected = self._store_rejected_frames(job_id, rejected_candidates)
+            except Exception:
+                # Rejected candidates are a convenience; never fail an
+                # otherwise successful pipeline over them.
+                logger.warning("Could not store rejected frames for job=%s", job_id, exc_info=True)
+                stored_rejected = []
             ready_count = sum(1 for item in ocr_results if item.status == "ready")
             empty_count = sum(1 for item in ocr_results if item.status == "empty")
             failed_count = sum(1 for item in ocr_results if item.status == "failed")
@@ -1770,7 +1781,7 @@ class JobService:
         job.searchable_export = ExportArtifact()
 
     def subscribe(self) -> queue.Queue[str]:
-        """Register an SSE subscriber; each queue item is a serialized JobResponse."""
+        """Register an SSE subscriber; each queue item is a complete SSE frame."""
         subscriber: queue.Queue[str] = queue.Queue(maxsize=100)
         with self._lock:
             self._subscribers.append(subscriber)
@@ -1783,6 +1794,15 @@ class JobService:
             except ValueError:
                 pass
 
+    def _publish_frame(self, frame: str) -> None:
+        for subscriber in list(self._subscribers):
+            try:
+                subscriber.put_nowait(frame)
+            except queue.Full:
+                # A stalled client keeps its connection but loses interim
+                # updates; the polling fallback covers the gap.
+                pass
+
     def _publish_latest_job(self) -> None:
         """Push the most recently updated job to all SSE subscribers.
 
@@ -1791,14 +1811,14 @@ class JobService:
         if not self._subscribers or not self._jobs:
             return
         latest = max(self._jobs.values(), key=lambda job: job.updated_at)
-        event = self._to_response(latest).model_dump_json()
-        for subscriber in list(self._subscribers):
-            try:
-                subscriber.put_nowait(event)
-            except queue.Full:
-                # A stalled client keeps its connection but loses interim
-                # updates; the polling fallback covers the gap.
-                pass
+        self._publish_frame(f"data: {self._to_response(latest).model_dump_json()}\n\n")
+
+    def _publish_deleted(self, job_id: str) -> None:
+        """Tell SSE subscribers a job is gone, so other tabs drop it too."""
+        with self._lock:
+            if not self._subscribers:
+                return
+            self._publish_frame(f"event: deleted\ndata: {json.dumps({'id': job_id})}\n\n")
 
     def _save_jobs(self) -> None:
         payload = {"jobs": [self._serialize_job(job) for job in self._jobs.values()]}

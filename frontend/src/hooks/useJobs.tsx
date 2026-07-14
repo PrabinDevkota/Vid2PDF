@@ -108,6 +108,10 @@ export function JobsProvider({ children }: { children: ReactNode }) {
         setActiveJob((current) => (current && current.id === job.id ? job : current));
       },
       setIsStreamHealthy,
+      (deletedJobId) => {
+        setJobs((currentJobs) => currentJobs.filter((item) => item.id !== deletedJobId));
+        setActiveJob((current) => (current?.id === deletedJobId ? null : current));
+      },
     );
   }, []);
 

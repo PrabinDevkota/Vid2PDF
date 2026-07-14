@@ -191,7 +191,6 @@ export function UploadPanel({ onJobCreated, compact }: UploadPanelProps) {
       }
     }
     setUploadingIndex(null);
-    setFailedIndexes(failed);
     setIsSubmitting(false);
 
     const succeeded = selectedFiles.length - failed.size;
@@ -204,17 +203,24 @@ export function UploadPanel({ onJobCreated, compact }: UploadPanelProps) {
       );
     }
     if (failed.size > 0) {
+      // Keep only the failed files so resubmitting retries them without
+      // duplicating the sessions that already succeeded.
+      const failedFiles = selectedFiles.filter((_, index) => failed.has(index));
+      setSelectedFiles(failedFiles);
+      setFailedIndexes(new Set(failedFiles.map((_, index) => index)));
       setError(
         `${failed.size} of ${selectedFiles.length} upload(s) failed` +
-          (firstError ? `: ${firstError}` : "."),
+          (firstError ? `: ${firstError}` : ".") +
+          " Submit again to retry the remaining files.",
       );
     } else {
       setSelectedFiles([]);
+      setFailedIndexes(new Set());
       setTrimStartText("");
       setTrimEndText("");
-      if (inputRef.current) {
-        inputRef.current.value = "";
-      }
+    }
+    if (inputRef.current) {
+      inputRef.current.value = "";
     }
     if (firstJob) {
       onJobCreated(firstJob);

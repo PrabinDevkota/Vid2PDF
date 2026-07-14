@@ -4,15 +4,18 @@ Vid2PDF reconstructs a clean PDF from a screen recording of a digital document b
 
 It is structured around a document reconstruction pipeline rather than generic frame dumping:
 
-1. upload one screen-recorded document video (or paste a video URL — YouTube and any yt-dlp-supported site, plus direct links)
-2. sample frames from the video
+1. upload one or more screen-recorded document videos (up to 10 per batch), or paste a video URL — YouTube and any yt-dlp-supported site, plus direct links
+2. sample frames from the video (optionally limited to a start/end time range)
 3. detect stable page-view segments (with adjustable detection sensitivity)
 4. pick the clearest representative frame for each page
-5. remove duplicates and weak pages
+5. remove duplicates and weak pages — the strongest rejected candidates are kept and can be restored from the Rejected tab
 6. generate previews for review
 7. extract text from unique page frames (OCR)
-8. let the user delete, rotate, reorder, and clean up pages (enhance / grayscale / B&W filters)
+8. let the user delete, rotate, reorder, and clean up pages (enhance / grayscale / B&W filters), with keyboard shortcuts for review (press `?` in the app)
 9. export an image PDF, a LaTeX-typeset text PDF (via Tectonic), and/or a searchable PDF (original page images with an invisible OCR text layer)
+
+Jobs can be cancelled while queued or processing, progress streams live over
+server-sent events, and the UI supports light, dark, and system themes.
 
 ## Repo layout
 
@@ -38,9 +41,10 @@ Vid2PDF/
 
 The frontend is a Vite React app focused on:
 
-- uploading one screen recording or pasting a video URL
-- reviewing extracted pages before export (delete, rotate, reorder, cleanup filters, reprocess with different sensitivity)
+- uploading recordings (single or batch) or pasting a video URL, with an optional processing time range
+- reviewing extracted pages before export (delete, rotate, reorder, cleanup filters, restore rejected candidates, reprocess with different sensitivity, keyboard shortcuts)
 - exporting image PDF, text PDF, and searchable PDF artifacts
+- live job progress over server-sent events (with polling fallback) and a light/dark/system theme toggle
 
 ### Backend
 
@@ -107,11 +111,14 @@ npm run dev
 ## API
 
 - `GET /health`
+- `GET /api/events` — server-sent events stream of job state changes
 - `GET /api/jobs`
 - `GET /api/jobs/{job_id}`
-- `POST /api/jobs/upload`
-- `POST /api/jobs/from-url` — create a job from a video URL (yt-dlp)
-- `POST /api/jobs/{job_id}/reprocess` — re-run page detection with a different sensitivity
+- `POST /api/jobs/upload` — accepts optional `trim_start` / `trim_end` seconds
+- `POST /api/jobs/from-url` — create a job from a video URL (yt-dlp), same trim options
+- `POST /api/jobs/{job_id}/reprocess` — re-run page detection with a different sensitivity or trim range
+- `POST /api/jobs/{job_id}/cancel` — cancel a queued or processing job
+- `POST /api/jobs/{job_id}/rejected/{rejected_id}/restore` — promote a pipeline-rejected frame to a page
 - `DELETE /api/jobs/{job_id}`
 - `POST /api/jobs/{job_id}/export` — image PDF
 - `POST /api/jobs/{job_id}/export/text` — OCR + LaTeX/Tectonic text PDF
