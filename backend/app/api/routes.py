@@ -41,23 +41,45 @@ def get_job(job_id: str) -> JobResponse:
     return job
 
 
+def _validate_trim(trim_start: float | None, trim_end: float | None) -> None:
+    if trim_start is not None and trim_start < 0:
+        raise HTTPException(status_code=422, detail="Trim start must be zero or positive.")
+    if trim_end is not None and trim_end <= 0:
+        raise HTTPException(status_code=422, detail="Trim end must be positive.")
+    if trim_start is not None and trim_end is not None and trim_end <= trim_start:
+        raise HTTPException(status_code=422, detail="Trim end must be after trim start.")
+
+
 @router.post("/jobs/upload", response_model=JobResponse)
 async def upload_job(
     file: UploadFile = File(...),
     processing_mode: Literal["screen", "camera"] = Form("screen"),
     ocr_language: str = Form("eng"),
     sensitivity: Literal["fewer", "balanced", "more"] = Form("balanced"),
+    trim_start: float | None = Form(None),
+    trim_end: float | None = Form(None),
 ) -> JobResponse:
-    return await job_service.create_job(file, processing_mode, ocr_language, sensitivity)
+    _validate_trim(trim_start, trim_end)
+    return await job_service.create_job(
+        file,
+        processing_mode,
+        ocr_language,
+        sensitivity,
+        trim_start=trim_start,
+        trim_end=trim_end,
+    )
 
 
 @router.post("/jobs/from-url", response_model=JobResponse)
 def create_job_from_url(payload: CreateJobFromUrlRequest) -> JobResponse:
+    _validate_trim(payload.trimStart, payload.trimEnd)
     job = job_service.create_job_from_url(
         payload.url,
         processing_mode=payload.processingMode,
         ocr_language=payload.ocrLanguage,
         sensitivity=payload.sensitivity,
+        trim_start=payload.trimStart,
+        trim_end=payload.trimEnd,
     )
     if job is None:
         raise HTTPException(status_code=400, detail="Enter a valid http(s) video URL.")
@@ -66,7 +88,13 @@ def create_job_from_url(payload: CreateJobFromUrlRequest) -> JobResponse:
 
 @router.post("/jobs/{job_id}/reprocess", response_model=JobResponse)
 def reprocess_job(job_id: str, payload: ReprocessJobRequest) -> JobResponse:
-    job = job_service.reprocess_job(job_id, payload.sensitivity)
+    _validate_trim(payload.trimStart, payload.trimEnd)
+    job = job_service.reprocess_job(
+        job_id,
+        payload.sensitivity,
+        trim_start=payload.trimStart,
+        trim_end=payload.trimEnd,
+    )
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found or has no stored video")
     return job

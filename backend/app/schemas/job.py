@@ -124,6 +124,8 @@ class JobResponse(BaseModel):
     sourceUrl: str | None = None
     ocrLanguage: str = "eng"
     sensitivity: Literal["fewer", "balanced", "more"] = "balanced"
+    trimStart: float | None = None
+    trimEnd: float | None = None
     status: Literal["queued", "processing", "ready", "failed", "cancelled"]
     createdAt: datetime
     updatedAt: datetime
@@ -164,10 +166,14 @@ class CreateJobFromUrlRequest(BaseModel):
     processingMode: Literal["screen", "camera"] = "screen"
     ocrLanguage: str = "eng"
     sensitivity: Literal["fewer", "balanced", "more"] = "balanced"
+    trimStart: float | None = None
+    trimEnd: float | None = None
 
 
 class ReprocessJobRequest(BaseModel):
     sensitivity: Literal["fewer", "balanced", "more"] | None = None
+    trimStart: float | None = None
+    trimEnd: float | None = None
 
 
 class OcrLanguagesResponse(BaseModel):

@@ -115,6 +115,8 @@ export interface ProcessingJob {
   sourceUrl?: string | null;
   ocrLanguage?: string;
   sensitivity?: Sensitivity;
+  trimStart?: number | null;
+  trimEnd?: number | null;
   status: JobStatus;
   createdAt: string;
   updatedAt: string;

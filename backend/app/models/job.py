@@ -150,3 +150,5 @@ class Job:
     ocr_language: str = "eng"
     sensitivity: Sensitivity = "balanced"
     cancel_requested: bool = False
+    trim_start: float | None = None
+    trim_end: float | None = None

@@ -93,6 +93,8 @@ def run_reconstruction_pipeline(
     upload_path: str,
     processing_mode: str,
     sensitivity: str = "balanced",
+    trim_start: float | None = None,
+    trim_end: float | None = None,
 ) -> PipelineResult:
     context = build_pipeline_context(
         job_id=job_id,
@@ -107,6 +109,8 @@ def run_reconstruction_pipeline(
         context=context,
         metadata=metadata,
         sample_fps=float(mode["sample_fps"]),
+        start_seconds=trim_start,
+        end_seconds=trim_end,
     )
 
     if context.processing_mode == "camera" and camera_detection_failed(sampled_frames):
@@ -123,6 +127,8 @@ def run_reconstruction_pipeline(
             context=context,
             metadata=metadata,
             sample_fps=float(mode["sample_fps"]),
+            start_seconds=trim_start,
+            end_seconds=trim_end,
         )
 
     segments = detect_stable_segments(

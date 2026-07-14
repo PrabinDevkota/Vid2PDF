@@ -30,6 +30,19 @@ function languageLabel(code: string): string {
   return LANGUAGE_NAMES[code] ? `${LANGUAGE_NAMES[code]} (${code})` : code;
 }
 
+/** Parse "90", "1:30", or "1:02:30" into seconds; empty → null; invalid → NaN. */
+function parseTimeInput(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (!/^\d+(:[0-5]?\d){0,2}(\.\d+)?$/.test(trimmed)) {
+    return Number.NaN;
+  }
+  const parts = trimmed.split(":").map(Number);
+  return parts.reduce((total, part) => total * 60 + part, 0);
+}
+
 type SourceKind = "file" | "url";
 
 interface UploadPanelProps {
@@ -45,6 +58,8 @@ export function UploadPanel({ onJobCreated, compact }: UploadPanelProps) {
   const [processingMode, setProcessingMode] = useState<ProcessingMode>("screen");
   const [ocrLanguage, setOcrLanguage] = useState("eng");
   const [languages, setLanguages] = useState<string[]>(["eng"]);
+  const [trimStartText, setTrimStartText] = useState("");
+  const [trimEndText, setTrimEndText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,14 +113,26 @@ export function UploadPanel({ onJobCreated, compact }: UploadPanelProps) {
       return;
     }
 
+    const trimStart = parseTimeInput(trimStartText);
+    const trimEnd = parseTimeInput(trimEndText);
+    if (Number.isNaN(trimStart) || Number.isNaN(trimEnd)) {
+      setError("Time range must be seconds or mm:ss (for example 90 or 1:30).");
+      return;
+    }
+    if (trimStart != null && trimEnd != null && trimEnd <= trimStart) {
+      setError("The end of the time range must be after the start.");
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
 
     try {
+      const trim = { trimStart, trimEnd };
       const job =
         sourceKind === "file"
-          ? await uploadVideo(selectedFile!, processingMode, ocrLanguage)
-          : await createJobFromUrl(videoUrl.trim(), processingMode, ocrLanguage);
+          ? await uploadVideo(selectedFile!, processingMode, ocrLanguage, trim)
+          : await createJobFromUrl(videoUrl.trim(), processingMode, ocrLanguage, trim);
       onJobCreated(job);
       toast(
         sourceKind === "file"
@@ -115,6 +142,8 @@ export function UploadPanel({ onJobCreated, compact }: UploadPanelProps) {
       );
       chooseFile(null);
       setVideoUrl("");
+      setTrimStartText("");
+      setTrimEndText("");
       if (inputRef.current) {
         inputRef.current.value = "";
       }
@@ -288,6 +317,36 @@ export function UploadPanel({ onJobCreated, compact }: UploadPanelProps) {
                 </option>
               ))}
             </select>
+          </label>
+          <label className="upload-option">
+            <span>Time range (optional)</span>
+            <div className="trim-inputs">
+              <input
+                aria-label="Start time"
+                className="trim-inputs__field"
+                inputMode="numeric"
+                placeholder="0:00"
+                type="text"
+                value={trimStartText}
+                onChange={(event) => {
+                  setTrimStartText(event.target.value);
+                  setError(null);
+                }}
+              />
+              <span className="trim-inputs__separator">–</span>
+              <input
+                aria-label="End time"
+                className="trim-inputs__field"
+                inputMode="numeric"
+                placeholder="end"
+                type="text"
+                value={trimEndText}
+                onChange={(event) => {
+                  setTrimEndText(event.target.value);
+                  setError(null);
+                }}
+              />
+            </div>
           </label>
         </div>
 

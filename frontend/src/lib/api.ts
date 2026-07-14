@@ -26,15 +26,27 @@ export async function fetchJob(jobId: string): Promise<ProcessingJob> {
   return readJson<ProcessingJob>(response, "Failed to load job");
 }
 
+export interface TrimRange {
+  trimStart?: number | null;
+  trimEnd?: number | null;
+}
+
 export async function uploadVideo(
   file: File,
   processingMode: ProcessingMode,
   ocrLanguage = "eng",
+  trim: TrimRange = {},
 ): Promise<ProcessingJob> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("processing_mode", processingMode);
   formData.append("ocr_language", ocrLanguage);
+  if (trim.trimStart != null) {
+    formData.append("trim_start", String(trim.trimStart));
+  }
+  if (trim.trimEnd != null) {
+    formData.append("trim_end", String(trim.trimEnd));
+  }
 
   const response = await fetch(`${API_BASE_URL}/api/jobs/upload`, {
     method: "POST",
@@ -48,13 +60,20 @@ export async function createJobFromUrl(
   url: string,
   processingMode: ProcessingMode,
   ocrLanguage = "eng",
+  trim: TrimRange = {},
 ): Promise<ProcessingJob> {
   const response = await fetch(`${API_BASE_URL}/api/jobs/from-url`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ url, processingMode, ocrLanguage }),
+    body: JSON.stringify({
+      url,
+      processingMode,
+      ocrLanguage,
+      trimStart: trim.trimStart ?? null,
+      trimEnd: trim.trimEnd ?? null,
+    }),
   });
 
   return readJson<ProcessingJob>(response, "Failed to import video from URL");

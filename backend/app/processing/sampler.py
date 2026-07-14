@@ -40,24 +40,39 @@ def sample_frames(
     metadata: VideoMetadata,
     sample_fps: float,
     should_abort: Callable[[], bool] | None = None,
+    start_seconds: float | None = None,
+    end_seconds: float | None = None,
 ) -> list[SampledFrame]:
     capture = cv2.VideoCapture(context.upload_path)
     if not capture.isOpened():
         raise ValueError(f"Could not read uploaded video: {context.upload_path}")
 
+    last_frame = max(metadata.frame_count - 1, 0)
+    start_frame = 0
+    end_frame = last_frame
+    if start_seconds is not None and start_seconds > 0:
+        start_frame = min(int(start_seconds * metadata.fps), last_frame)
+    if end_seconds is not None and end_seconds > 0:
+        end_frame = min(int(end_seconds * metadata.fps), last_frame)
+    if end_frame < start_frame:
+        capture.release()
+        raise ValueError("Trim range is empty: the end time must be after the start time.")
+
     effective_sample_fps = max(sample_fps, 0.25)
     frame_interval = max(int(round(metadata.fps / effective_sample_fps)), 1)
     sampled_frames: list[SampledFrame] = []
-    frame_index = 0
+    frame_index = start_frame
+    if start_frame > 0:
+        capture.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
     previous_detection = None
     previous_processed_frame = None
 
     while True:
         success, frame = capture.read()
-        if not success:
+        if not success or frame_index > end_frame:
             break
 
-        if frame_index % frame_interval == 0:
+        if (frame_index - start_frame) % frame_interval == 0:
             if should_abort is not None and should_abort():
                 capture.release()
                 raise JobCancelledError("Frame sampling aborted by cancellation request.")
@@ -115,6 +130,11 @@ def sample_frames(
     capture.release()
 
     if not sampled_frames:
+        if start_frame > 0 or end_frame < last_frame:
+            raise ValueError(
+                f"No frames were sampled from {Path(context.upload_path).name} "
+                "within the selected time range."
+            )
         raise ValueError(
             f"No frames were sampled from {Path(context.upload_path).name}. "
             "The video may be unreadable or too short."

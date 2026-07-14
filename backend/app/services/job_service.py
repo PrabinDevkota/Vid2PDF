@@ -116,6 +116,8 @@ class JobService:
         processing_mode: ProcessingMode = "screen",
         ocr_language: str = "eng",
         sensitivity: str = "balanced",
+        trim_start: float | None = None,
+        trim_end: float | None = None,
     ) -> JobResponse:
         job_id = uuid4().hex[:12]
         created_at = datetime.now(timezone.utc)
@@ -139,6 +141,8 @@ class JobService:
             upload_path=str(upload_path),
             ocr_language=sanitize_language(ocr_language),
             sensitivity=self._sanitize_sensitivity(sensitivity),
+            trim_start=trim_start,
+            trim_end=trim_end,
         )
 
         with self._lock:
@@ -154,6 +158,8 @@ class JobService:
         processing_mode: ProcessingMode = "screen",
         ocr_language: str = "eng",
         sensitivity: str = "balanced",
+        trim_start: float | None = None,
+        trim_end: float | None = None,
     ) -> JobResponse | None:
         url = url.strip()
         if not is_valid_video_url(url):
@@ -178,6 +184,8 @@ class JobService:
             source_url=url,
             ocr_language=sanitize_language(ocr_language),
             sensitivity=self._sanitize_sensitivity(sensitivity),
+            trim_start=trim_start,
+            trim_end=trim_end,
         )
 
         with self._lock:
@@ -284,7 +292,13 @@ class JobService:
             job.updated_at = job.completed_at
             self._save_jobs()
 
-    def reprocess_job(self, job_id: str, sensitivity: str | None = None) -> JobResponse | None:
+    def reprocess_job(
+        self,
+        job_id: str,
+        sensitivity: str | None = None,
+        trim_start: float | None = None,
+        trim_end: float | None = None,
+    ) -> JobResponse | None:
         with self._lock:
             job = self._jobs.get(job_id)
             if job is None or not job.upload_path:
@@ -294,6 +308,9 @@ class JobService:
 
             if sensitivity is not None:
                 job.sensitivity = self._sanitize_sensitivity(sensitivity)
+            if trim_start is not None or trim_end is not None:
+                job.trim_start = trim_start
+                job.trim_end = trim_end
             job.cancel_requested = False
             job.status = "queued"
             job.pages = []
@@ -661,6 +678,8 @@ class JobService:
                 processing_mode = job.processing_mode
                 sensitivity = job.sensitivity
                 ocr_language = job.ocr_language
+                trim_start = job.trim_start
+                trim_end = job.trim_end
             if not upload_path:
                 raise ValueError("Uploaded video path is missing.")
 
@@ -674,11 +693,19 @@ class JobService:
 
             self._start_stage(job_id, "sample_frames", "Sampling frames from the uploaded video.", 8)
             metadata = load_video_metadata(upload_path)
+            if trim_start is not None or trim_end is not None:
+                shown_start = max(trim_start or 0.0, 0.0)
+                shown_end = trim_end if trim_end is not None else metadata.duration_seconds
+                pipeline_notes.append(
+                    f"Processing was limited to the {shown_start:.1f}s – {shown_end:.1f}s time range."
+                )
             sampled_frames = sample_frames(
                 context=context,
                 metadata=metadata,
                 sample_fps=float(settings_for_mode["sample_fps"]),
                 should_abort=lambda: self._cancel_requested(job_id),
+                start_seconds=trim_start,
+                end_seconds=trim_end,
             )
 
             if processing_mode == "camera" and camera_detection_failed(sampled_frames):
@@ -697,6 +724,8 @@ class JobService:
                     metadata=metadata,
                     sample_fps=float(settings_for_mode["sample_fps"]),
                     should_abort=lambda: self._cancel_requested(job_id),
+                    start_seconds=trim_start,
+                    end_seconds=trim_end,
                 )
                 with self._lock:
                     job = self._jobs[job_id]
@@ -1224,6 +1253,8 @@ class JobService:
             sourceUrl=job.source_url,
             ocrLanguage=job.ocr_language,
             sensitivity=job.sensitivity,
+            trimStart=job.trim_start,
+            trimEnd=job.trim_end,
             status=job.status,
             createdAt=job.created_at,
             updatedAt=job.updated_at,
@@ -1656,6 +1687,8 @@ class JobService:
             "ocr_language": job.ocr_language,
             "sensitivity": job.sensitivity,
             "cancel_requested": job.cancel_requested,
+            "trim_start": job.trim_start,
+            "trim_end": job.trim_end,
         }
 
     def _deserialize_job(self, payload: dict[str, object]) -> Job:
@@ -1757,6 +1790,8 @@ class JobService:
             ocr_language=sanitize_language(str(payload.get("ocr_language", "eng"))),
             sensitivity=self._sanitize_sensitivity(str(payload.get("sensitivity", "balanced"))),  # type: ignore[arg-type]
             cancel_requested=bool(payload.get("cancel_requested", False)),
+            trim_start=float(payload["trim_start"]) if payload.get("trim_start") is not None else None,
+            trim_end=float(payload["trim_end"]) if payload.get("trim_end") is not None else None,
         )
 
     def _serialize_datetime(self, value: datetime | None) -> str | None:
