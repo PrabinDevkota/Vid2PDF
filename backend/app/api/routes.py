@@ -1,6 +1,8 @@
-from typing import Literal
+import queue
+from typing import Iterator, Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 
 from app.core.settings import settings
 from app.processing.ocr import get_available_languages
@@ -25,6 +27,30 @@ def list_ocr_languages() -> OcrLanguagesResponse:
     return OcrLanguagesResponse(
         languages=get_available_languages(),
         default=settings.ocr_language,
+    )
+
+
+@router.get("/events")
+def stream_job_events() -> StreamingResponse:
+    """Server-sent events: one `data:` line per job state change."""
+
+    def event_stream() -> Iterator[str]:
+        subscriber = job_service.subscribe()
+        try:
+            yield ": connected\n\n"
+            while True:
+                try:
+                    payload = subscriber.get(timeout=15.0)
+                    yield f"data: {payload}\n\n"
+                except queue.Empty:
+                    yield ": keepalive\n\n"
+        finally:
+            job_service.unsubscribe(subscriber)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

@@ -221,6 +221,23 @@ export async function startSearchableExport(
   );
 }
 
+export function subscribeToJobEvents(
+  onJob: (job: ProcessingJob) => void,
+  onHealthChange?: (healthy: boolean) => void,
+): () => void {
+  const source = new EventSource(`${API_BASE_URL}/api/events`);
+  source.onopen = () => onHealthChange?.(true);
+  source.onerror = () => onHealthChange?.(false);
+  source.onmessage = (event) => {
+    try {
+      onJob(JSON.parse(event.data) as ProcessingJob);
+    } catch {
+      // Malformed event; the polling fallback keeps state fresh.
+    }
+  };
+  return () => source.close();
+}
+
 export function resolveArtifactUrl(url: string | null): string | null {
   if (!url) {
     return null;

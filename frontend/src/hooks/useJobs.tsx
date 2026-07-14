@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
-import { deleteJob, fetchJob, fetchJobs } from "../lib/api";
+import { deleteJob, fetchJob, fetchJobs, subscribeToJobEvents } from "../lib/api";
 import type { ProcessingJob } from "../types";
 
 function needsPolling(job: ProcessingJob | null): boolean {
@@ -46,6 +46,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
   const [activeJob, setActiveJob] = useState<ProcessingJob | null>(null);
   const [isLoadingJobs, setIsLoadingJobs] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [isStreamHealthy, setIsStreamHealthy] = useState(false);
 
   const readyCount = useMemo(
     () => jobs.filter((job) => job.status === "ready").length,
@@ -90,19 +91,36 @@ export function JobsProvider({ children }: { children: ReactNode }) {
       .finally(() => setIsLoadingJobs(false));
   }, [loadActiveJob]);
 
+  // Live updates pushed from the backend; polling below is the fallback.
+  useEffect(() => {
+    return subscribeToJobEvents(
+      (job) => {
+        setJobs((currentJobs) =>
+          currentJobs.some((item) => item.id === job.id)
+            ? currentJobs.map((item) => (item.id === job.id ? job : item))
+            : [job, ...currentJobs],
+        );
+        setActiveJob((current) => (current && current.id === job.id ? job : current));
+      },
+      setIsStreamHealthy,
+    );
+  }, []);
+
   useEffect(() => {
     if (!needsPolling(activeJob)) {
       return;
     }
 
+    // While the event stream is healthy, poll rarely as a safety net only.
+    const interval = isStreamHealthy ? 10000 : 2500;
     const timer = window.setInterval(() => {
       void loadActiveJob().catch((error) => {
         setLoadError(error instanceof Error ? error.message : "Failed to refresh session.");
       });
-    }, 2500);
+    }, interval);
 
     return () => window.clearInterval(timer);
-  }, [activeJob, loadActiveJob]);
+  }, [activeJob, loadActiveJob, isStreamHealthy]);
 
   function handleJobCreated(job: ProcessingJob) {
     setJobs((currentJobs) => [job, ...currentJobs.filter((item) => item.id !== job.id)]);

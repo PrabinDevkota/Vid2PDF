@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import queue
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -90,6 +91,7 @@ class JobService:
     def __init__(self) -> None:
         self._jobs: dict[str, Job] = {}
         self._lock = RLock()
+        self._subscribers: list[queue.Queue[str]] = []
         self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="vid2pdf-worker")
         self._storage_root = Path(settings.storage_path)
         self._uploads_root = self._storage_root / "uploads"
@@ -1767,9 +1769,41 @@ class JobService:
         job.text_export = ExportArtifact()
         job.searchable_export = ExportArtifact()
 
+    def subscribe(self) -> queue.Queue[str]:
+        """Register an SSE subscriber; each queue item is a serialized JobResponse."""
+        subscriber: queue.Queue[str] = queue.Queue(maxsize=100)
+        with self._lock:
+            self._subscribers.append(subscriber)
+        return subscriber
+
+    def unsubscribe(self, subscriber: queue.Queue[str]) -> None:
+        with self._lock:
+            try:
+                self._subscribers.remove(subscriber)
+            except ValueError:
+                pass
+
+    def _publish_latest_job(self) -> None:
+        """Push the most recently updated job to all SSE subscribers.
+
+        Called from _save_jobs (the single mutation choke point) with the lock held.
+        """
+        if not self._subscribers or not self._jobs:
+            return
+        latest = max(self._jobs.values(), key=lambda job: job.updated_at)
+        event = self._to_response(latest).model_dump_json()
+        for subscriber in list(self._subscribers):
+            try:
+                subscriber.put_nowait(event)
+            except queue.Full:
+                # A stalled client keeps its connection but loses interim
+                # updates; the polling fallback covers the gap.
+                pass
+
     def _save_jobs(self) -> None:
         payload = {"jobs": [self._serialize_job(job) for job in self._jobs.values()]}
         self._state_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        self._publish_latest_job()
 
     def _load_jobs(self) -> None:
         if not self._state_path.exists():
