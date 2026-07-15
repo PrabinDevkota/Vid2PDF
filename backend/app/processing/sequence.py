@@ -108,12 +108,19 @@ def _page_similarity(left: SelectedPage, right: SelectedPage) -> float:
 
 
 def _signature_image(page: SelectedPage) -> np.ndarray:
+    # Consulted for every neighbor comparison; memoize per page.
+    cached = getattr(page, "_sequence_signature", None)
+    if cached is not None:
+        return cached
     image = page.selected_frame.image
     if image is None:
-        return np.zeros((56, 56), dtype=np.float32)
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    resized = cv2.resize(gray, (56, 56), interpolation=cv2.INTER_AREA)
-    return cv2.normalize(resized.astype(np.float32), None, 0.0, 1.0, cv2.NORM_MINMAX)
+        signature = np.zeros((56, 56), dtype=np.float32)
+    else:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        resized = cv2.resize(gray, (56, 56), interpolation=cv2.INTER_AREA)
+        signature = cv2.normalize(resized.astype(np.float32), None, 0.0, 1.0, cv2.NORM_MINMAX)
+    page._sequence_signature = signature  # type: ignore[attr-defined]
+    return signature
 
 
 def _histogram_similarity(left: np.ndarray, right: np.ndarray) -> float:

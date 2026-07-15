@@ -234,6 +234,20 @@ def _duplicate_evidence(
     }
 
 
+def _page_cache(page: SelectedPage) -> dict:
+    """Per-page memo for pairwise comparisons.
+
+    Every signature below is derived only from the page's selected frame, but
+    is consulted for every candidate pair — O(n²) times. Without this cache
+    the expensive normalize_final_page render ran up to 8x per pair.
+    """
+    cache = getattr(page, "_dedupe_cache", None)
+    if cache is None:
+        cache = {}
+        page._dedupe_cache = cache  # type: ignore[attr-defined]
+    return cache
+
+
 def _hamming_distance(left_hash: str, right_hash: str) -> int:
     width = max(len(left_hash), len(right_hash))
     left_value = int(left_hash, 16) if left_hash else 0
@@ -242,34 +256,51 @@ def _hamming_distance(left_hash: str, right_hash: str) -> int:
 
 
 def _content_signature(page: SelectedPage) -> np.ndarray:
+    cache = _page_cache(page)
+    if "content" in cache:
+        return cache["content"]
     image = _normalized_duplicate_render(page)
     if image is None:
-        return np.zeros((48, 48), dtype=np.float32)
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    resized = cv2.resize(gray, (48, 48), interpolation=cv2.INTER_AREA)
-    return cv2.normalize(resized.astype(np.float32), None, 0.0, 1.0, cv2.NORM_MINMAX)
+        signature = np.zeros((48, 48), dtype=np.float32)
+    else:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        resized = cv2.resize(gray, (48, 48), interpolation=cv2.INTER_AREA)
+        signature = cv2.normalize(resized.astype(np.float32), None, 0.0, 1.0, cv2.NORM_MINMAX)
+    cache["content"] = signature
+    return signature
 
 
 def _layout_signature(page: SelectedPage) -> np.ndarray:
+    cache = _page_cache(page)
+    if "layout" in cache:
+        return cache["layout"]
     image = _normalized_duplicate_render(page)
     if image is None:
-        return np.zeros((40, 40), dtype=np.float32)
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    resized = cv2.resize(gray, (40, 40), interpolation=cv2.INTER_AREA)
-    binary = cv2.adaptiveThreshold(
-        resized,
-        255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY_INV,
-        15,
-        7,
-    )
-    return binary.astype(np.float32) / 255.0
+        layout = np.zeros((40, 40), dtype=np.float32)
+    else:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        resized = cv2.resize(gray, (40, 40), interpolation=cv2.INTER_AREA)
+        binary = cv2.adaptiveThreshold(
+            resized,
+            255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY_INV,
+            15,
+            7,
+        )
+        layout = binary.astype(np.float32) / 255.0
+    cache["layout"] = layout
+    return layout
 
 
 def _projection_profile(page: SelectedPage) -> tuple[np.ndarray, np.ndarray]:
+    cache = _page_cache(page)
+    if "profile" in cache:
+        return cache["profile"]
     layout = _layout_signature(page)
-    return np.mean(layout, axis=1), np.mean(layout, axis=0)
+    profile = (np.mean(layout, axis=1), np.mean(layout, axis=0))
+    cache["profile"] = profile
+    return profile
 
 
 def _histogram_similarity(left: np.ndarray, right: np.ndarray) -> float:
@@ -305,9 +336,13 @@ def _text_structure_similarity(left: SelectedPage, right: SelectedPage) -> float
 
 
 def _text_structure_tokens(page: SelectedPage) -> set[str]:
+    cache = _page_cache(page)
+    if "tokens" in cache:
+        return cache["tokens"]
     image = _normalized_duplicate_render(page)
     if image is None:
-        return set()
+        cache["tokens"] = set()
+        return cache["tokens"]
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     binary = cv2.adaptiveThreshold(
@@ -335,6 +370,7 @@ def _text_structure_tokens(page: SelectedPage) -> set[str]:
         col_bucket = min(int((x / max(width, 1)) * 8), 7)
         size_bucket = min(int((area / max(height * width, 1)) * 8000), 9)
         tokens.add(f"r{row_bucket}c{col_bucket}s{size_bucket}")
+    cache["tokens"] = tokens
     return tokens
 
 
@@ -410,8 +446,13 @@ def _is_weak_duplicate_capture(page: SelectedPage) -> bool:
 
 
 def _normalized_duplicate_render(page: SelectedPage):
+    cache = _page_cache(page)
+    if "render" in cache:
+        return cache["render"]
+
     image = page.selected_frame.image
     if image is None:
+        cache["render"] = None
         return None
 
     quality = page.selected_frame.quality
@@ -425,4 +466,6 @@ def _normalized_duplicate_render(page: SelectedPage):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     normalized = cv2.normalize(gray, None, 0, 255, cv2.NORM_MINMAX)
     standardized = cv2.resize(normalized, (512, 704), interpolation=cv2.INTER_AREA)
-    return cv2.cvtColor(standardized, cv2.COLOR_GRAY2BGR)
+    render = cv2.cvtColor(standardized, cv2.COLOR_GRAY2BGR)
+    cache["render"] = render
+    return render
