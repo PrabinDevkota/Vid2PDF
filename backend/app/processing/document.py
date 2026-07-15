@@ -452,7 +452,22 @@ def _stabilize_mask(mask: np.ndarray) -> np.ndarray:
 
 
 def _crop_from_mask(image: np.ndarray, mask: np.ndarray) -> np.ndarray | None:
-    height, width = image.shape[:2]
+    box = _document_box_from_mask(mask)
+    if box is None:
+        return None
+    left, top, right, bottom = box
+    return image[top:bottom, left:right]
+
+
+def _document_box_from_mask(
+    mask: np.ndarray,
+    *,
+    min_area_ratio: float = 0.35,
+    min_fill_ratio: float = 0.7,
+    min_side_ratio: float = 0.45,
+) -> tuple[int, int, int, int] | None:
+    """Bounding box (left, top, right, bottom) of the dominant page region."""
+    height, width = mask.shape[:2]
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
         return None
@@ -463,7 +478,7 @@ def _crop_from_mask(image: np.ndarray, mask: np.ndarray) -> np.ndarray | None:
 
     for contour in contours:
         area = cv2.contourArea(contour)
-        if area < image_area * 0.35:
+        if area < image_area * min_area_ratio:
             continue
 
         x, y, w, h = cv2.boundingRect(contour)
@@ -473,7 +488,7 @@ def _crop_from_mask(image: np.ndarray, mask: np.ndarray) -> np.ndarray | None:
         aspect_ratio = w / max(h, 1)
         if aspect_ratio < 0.45 or aspect_ratio > 1.9:
             continue
-        if fill_ratio < 0.7:
+        if fill_ratio < min_fill_ratio:
             continue
 
         score = (coverage * 0.7) + (fill_ratio * 0.3)
@@ -500,10 +515,53 @@ def _crop_from_mask(image: np.ndarray, mask: np.ndarray) -> np.ndarray | None:
 
     cropped_width = right - left
     cropped_height = bottom - top
-    if cropped_width < width * 0.45 or cropped_height < height * 0.45:
+    if cropped_width < width * min_side_ratio or cropped_height < height * min_side_ratio:
         return None
 
-    return image[top:bottom, left:right]
+    return int(left), int(top), int(right), int(bottom)
+
+
+def suggest_document_crop_box(image: np.ndarray) -> tuple[int, int, int, int] | None:
+    """Suggest an (x, y, width, height) crop that keeps only the paper region.
+
+    Uses the same page mask as crop_document_image but returns coordinates so
+    callers (the page editor's auto-crop) can store them as an editable crop
+    instead of slicing the image directly. Returns None when no convincing
+    document region is found or the crop would be a near no-op.
+    """
+    height, width = image.shape[:2]
+    if height < 80 or width < 80:
+        return None
+
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    # More lenient than the automatic pipeline crop: this runs on explicit
+    # user request, the crop stays reviewable in the editor, and real phone
+    # captures are keystoned so the page fills less of its bounding box.
+    box = _document_box_from_mask(
+        _build_page_mask(gray, hsv[:, :, 1], hsv[:, :, 2]),
+        min_area_ratio=0.18,
+        min_fill_ratio=0.5,
+        min_side_ratio=0.3,
+    )
+    if box is None:
+        box = _document_box_from_mask(
+            _build_fallback_mask(gray),
+            min_area_ratio=0.18,
+            min_fill_ratio=0.5,
+            min_side_ratio=0.3,
+        )
+    if box is None:
+        return None
+
+    left, top, right, bottom = box
+    crop_width = right - left
+    crop_height = bottom - top
+    # Nearly the whole frame already: cropping would only mark the page as
+    # edited without visibly removing anything.
+    if crop_width >= width * 0.98 and crop_height >= height * 0.98:
+        return None
+    return left, top, crop_width, crop_height
 
 
 def _border_white_ratio(mask: np.ndarray, border_size: int = 12) -> float:

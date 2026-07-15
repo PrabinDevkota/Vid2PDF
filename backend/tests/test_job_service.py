@@ -375,3 +375,97 @@ def test_update_page_persists_crop_blur_and_text_edits(tmp_path) -> None:
     assert rendered.shape[0] == 140
     assert not np.array_equal(rendered, image)
     assert service._jobs[job.id].pages[0].edits != PageEdits()
+
+
+def _document_scene_image() -> np.ndarray:
+    """Bright paper on a dark desk with a hand-like blob outside the page."""
+    image = np.full((420, 320, 3), (58, 82, 106), dtype=np.uint8)
+    cv2.rectangle(image, (48, 40), (270, 380), (244, 243, 238), thickness=-1)
+    cv2.rectangle(image, (66, 70), (250, 96), (25, 25, 25), thickness=-1)
+    cv2.rectangle(image, (66, 130), (250, 150), (30, 30, 30), thickness=-1)
+    cv2.ellipse(image, (300, 400), (48, 34), 0, 0, 360, (86, 118, 172), thickness=-1)
+    return image
+
+
+def _seed_croppable_job(service: JobService, tmp_path, job_id: str = "job-crop") -> np.ndarray:
+    now = datetime.now(timezone.utc)
+    source_dir = tmp_path / "jobs" / job_id / "source-pages"
+    page_dir = tmp_path / "jobs" / job_id / "pages"
+    thumb_dir = tmp_path / "jobs" / job_id / "thumbnails"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    page_dir.mkdir(parents=True, exist_ok=True)
+    thumb_dir.mkdir(parents=True, exist_ok=True)
+
+    image = _document_scene_image()
+    cv2.imwrite(str(source_dir / "page-1-source.png"), image)
+    cv2.imwrite(str(page_dir / "page-1.png"), image)
+    cv2.imwrite(str(thumb_dir / "page-1-thumb.jpg"), image)
+
+    service._jobs[job_id] = Job(
+        id=job_id,
+        filename="crop.mp4",
+        processing_mode="camera",
+        status="ready",
+        created_at=now,
+        updated_at=now,
+        pages=[
+            Page(
+                id="page-1",
+                job_id=job_id,
+                order_index=0,
+                page_number=1,
+                preview_label="Page 1",
+                thumbnail_url=f"/artifacts/jobs/{job_id}/thumbnails/page-1-thumb.jpg",
+                image_url=f"/artifacts/jobs/{job_id}/pages/page-1.png",
+                source_image_url=f"/artifacts/jobs/{job_id}/source-pages/page-1-source.png",
+                sharpness_score=0.9,
+                segment_start=0.0,
+                segment_end=1.0,
+                source_frame_index=4,
+                source_timestamp=0.2,
+            )
+        ],
+        export=ExportArtifact(status="ready", filename=f"{job_id}.pdf"),
+    )
+    return image
+
+
+def test_suggest_page_crop_returns_document_box(tmp_path) -> None:
+    settings.storage_path = str(tmp_path)
+    service = JobService()
+    image = _seed_croppable_job(service, tmp_path)
+
+    suggestion = service.suggest_page_crop("job-crop", "page-1", rotation=0)
+
+    assert suggestion is not None
+    assert suggestion.crop is not None
+    assert suggestion.crop.width < image.shape[1]
+    assert suggestion.crop.height < image.shape[0]
+    # The suggested crop should cover the page rectangle drawn at (48,40)-(270,380).
+    assert suggestion.crop.x <= 48
+    assert suggestion.crop.y <= 40
+    assert suggestion.crop.x + suggestion.crop.width >= 270
+
+    assert service.suggest_page_crop("job-crop", "missing-page", rotation=0) is None
+    assert service.suggest_page_crop("missing-job", "page-1", rotation=0) is None
+
+
+def test_auto_crop_pages_crops_and_rerenders_active_pages(tmp_path) -> None:
+    settings.storage_path = str(tmp_path)
+    service = JobService()
+    image = _seed_croppable_job(service, tmp_path)
+
+    response = service.auto_crop_pages("job-crop")
+
+    assert response is not None
+    page = response.pages[0]
+    assert page.edits.crop is not None
+    assert page.edits.crop.width < image.shape[1]
+    assert response.export.status == "idle"
+
+    rendered = cv2.imread(str(tmp_path / "jobs" / "job-crop" / "pages" / "page-1.png"))
+    assert rendered is not None
+    assert rendered.shape[1] == page.edits.crop.width
+    assert rendered.shape[0] == page.edits.crop.height
+    # The cropped render keeps the bright page rather than the dark desk.
+    assert float(np.mean(rendered)) > 150

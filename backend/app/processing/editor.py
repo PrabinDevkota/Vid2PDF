@@ -47,6 +47,11 @@ def build_thumbnail(image: np.ndarray) -> np.ndarray:
     return cv2.resize(image, (target_width, target_height), interpolation=cv2.INTER_AREA)
 
 
+def rotate_image(image: np.ndarray, rotation: int) -> np.ndarray:
+    """Rotate by a multiple of 90°, matching how page edits are applied."""
+    return _rotate(image, rotation)
+
+
 def _rotate(image: np.ndarray, rotation: int) -> np.ndarray:
     turns = (rotation % 360) // 90
     if turns == 1:

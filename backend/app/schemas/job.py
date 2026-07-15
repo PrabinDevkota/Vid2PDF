@@ -187,6 +187,12 @@ class ReprocessJobRequest(BaseModel):
     trimEnd: float | None = None
 
 
+class CropSuggestionResponse(BaseModel):
+    """Auto-detected document crop for a page; crop is null when no region was found."""
+
+    crop: CropBoxPayload | None = None
+
+
 class OcrLanguagesResponse(BaseModel):
     languages: list[str]
     default: str

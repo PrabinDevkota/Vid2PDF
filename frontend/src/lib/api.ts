@@ -1,4 +1,4 @@
-import type { PageEdits, ProcessingJob, ProcessingMode, Sensitivity } from "../types";
+import type { CropBox, PageEdits, ProcessingJob, ProcessingMode, Sensitivity } from "../types";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ||
@@ -128,6 +128,24 @@ export async function bulkUpdatePages(
   });
 
   return readJson<ProcessingJob>(response, "Failed to update selected pages");
+}
+
+export async function fetchCropSuggestion(
+  jobId: string,
+  pageId: string,
+  rotation: number,
+): Promise<{ crop: CropBox | null }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/jobs/${jobId}/pages/${pageId}/crop-suggestion?rotation=${rotation}`,
+  );
+  return readJson<{ crop: CropBox | null }>(response, "Failed to detect the document area");
+}
+
+export async function autoCropPages(jobId: string): Promise<ProcessingJob> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/pages/autocrop`, {
+    method: "POST",
+  });
+  return readJson<ProcessingJob>(response, "Failed to auto-crop pages");
 }
 
 export async function reorderPages(

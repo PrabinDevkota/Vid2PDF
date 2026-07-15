@@ -7,9 +7,10 @@ import {
   RotateCcw,
   RotateCw,
   Type,
+  Wand2,
   X,
 } from "lucide-react";
-import { resolveArtifactUrl } from "../../lib/api";
+import { fetchCropSuggestion, resolveArtifactUrl } from "../../lib/api";
 import type {
   BlurRegion,
   CropBox,
@@ -72,6 +73,8 @@ export function PageEditorModal({
   const [activeStroke, setActiveStroke] = useState<DrawStroke | null>(null);
   const [imageReady, setImageReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [isAutoCropping, setIsAutoCropping] = useState(false);
+  const [autoCropNote, setAutoCropNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (!page) {
@@ -84,6 +87,8 @@ export function PageEditorModal({
     setActiveStroke(null);
     setImageReady(false);
     setLoadError(null);
+    setIsAutoCropping(false);
+    setAutoCropNote(null);
 
     const sourceUrl = resolveArtifactUrl(page.sourceImageUrl ?? page.imageUrl);
     if (!sourceUrl) {
@@ -92,6 +97,10 @@ export function PageEditorModal({
     }
 
     const image = new Image();
+    // The page image lives on the API origin (e.g. :8000 vs the app's :5173).
+    // Without a CORS-enabled load the canvas becomes tainted and getImageData
+    // throws a SecurityError, which broke the cleanup-filter previews.
+    image.crossOrigin = "anonymous";
     image.onload = () => {
       imageRef.current = image;
       setImageReady(true);
@@ -313,6 +322,29 @@ export function PageEditorModal({
     await onSave(edits);
   }
 
+  async function handleAutoCrop() {
+    if (!page || !edits) {
+      return;
+    }
+    setIsAutoCropping(true);
+    setAutoCropNote(null);
+    try {
+      const suggestion = await fetchCropSuggestion(page.jobId, page.id, edits.rotation);
+      if (suggestion.crop) {
+        setEdits(transformEdits(edits.rotation, suggestion.crop));
+        setAutoCropNote("Cropped to the detected document area. Save to apply.");
+      } else {
+        setAutoCropNote("No document region detected — drag to crop manually.");
+      }
+    } catch (error) {
+      setAutoCropNote(
+        error instanceof Error ? error.message : "Auto-crop failed. Try a manual crop.",
+      );
+    } finally {
+      setIsAutoCropping(false);
+    }
+  }
+
   return (
     <div className="editor-modal">
       <div className="editor-modal__backdrop" onClick={handleClose} />
@@ -406,16 +438,32 @@ export function PageEditorModal({
               ) : null}
             </div>
 
-            {tool === "crop" && edits.crop ? (
+            {tool === "crop" ? (
               <div className="editor-control-group">
                 <span className="editor-group-label">Crop</span>
                 <button
                   className="secondary-button"
-                  onClick={() => setEdits(transformEdits(edits.rotation, null))}
+                  disabled={isAutoCropping || !imageReady}
+                  onClick={() => void handleAutoCrop()}
                   type="button"
                 >
-                  Clear crop
+                  {isAutoCropping ? (
+                    <Loader2 size={14} className="spin" aria-hidden="true" />
+                  ) : (
+                    <Wand2 size={14} aria-hidden="true" />
+                  )}
+                  Auto-crop to page
                 </button>
+                {edits.crop ? (
+                  <button
+                    className="secondary-button"
+                    onClick={() => setEdits(transformEdits(edits.rotation, null))}
+                    type="button"
+                  >
+                    Clear crop
+                  </button>
+                ) : null}
+                {autoCropNote ? <p className="editor-note">{autoCropNote}</p> : null}
               </div>
             ) : null}
 
@@ -758,7 +806,15 @@ function applyFilterPreview(
   if (filter === "none" || width < 1 || height < 1) {
     return;
   }
-  const imageData = ctx.getImageData(0, 0, width, height);
+  let imageData: ImageData;
+  try {
+    imageData = ctx.getImageData(0, 0, width, height);
+  } catch {
+    // Tainted canvas (image served without CORS headers): approximate the
+    // look with the built-in canvas filter instead of crashing the preview.
+    applyCssFilterFallback(ctx, width, height, filter);
+    return;
+  }
   const data = imageData.data;
   for (let i = 0; i < data.length; i += 4) {
     const luminance = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
@@ -776,6 +832,33 @@ function applyFilterPreview(
     }
   }
   ctx.putImageData(imageData, 0, 0);
+}
+
+const CSS_FILTER_FALLBACK: Record<Exclude<PageFilter, "none">, string> = {
+  grayscale: "grayscale(1)",
+  bw: "grayscale(1) contrast(3) brightness(1.15)",
+  enhance: "contrast(1.25) brightness(1.12) saturate(1.05)",
+};
+
+function applyCssFilterFallback(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  filter: Exclude<PageFilter, "none">,
+) {
+  const copy = document.createElement("canvas");
+  copy.width = width;
+  copy.height = height;
+  const copyCtx = copy.getContext("2d");
+  if (!copyCtx) {
+    return;
+  }
+  copyCtx.drawImage(ctx.canvas, 0, 0);
+  ctx.save();
+  ctx.filter = CSS_FILTER_FALLBACK[filter];
+  ctx.clearRect(0, 0, width, height);
+  ctx.drawImage(copy, 0, 0);
+  ctx.restore();
 }
 
 function drawStroke(context: CanvasRenderingContext2D, stroke: DrawStroke) {

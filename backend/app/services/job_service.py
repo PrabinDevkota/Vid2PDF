@@ -34,9 +34,9 @@ from app.processing.cancellation import JobCancelledError
 from app.processing.context import build_pipeline_context
 from app.processing.deduper import remove_duplicates
 from app.processing.debug import write_pipeline_debug_report
-from app.processing.document import detect_document_region
+from app.processing.document import detect_document_region, suggest_document_crop_box
 from app.processing.downloader import download_video, is_valid_video_url
-from app.processing.editor import write_rendered_page
+from app.processing.editor import rotate_image, write_rendered_page
 from app.processing.ocr import (
     PageText,
     TextBlock,
@@ -67,6 +67,7 @@ from app.schemas.job import (
     BlurRegionPayload,
     BulkUpdatePagesRequest,
     CropBoxPayload,
+    CropSuggestionResponse,
     DrawStrokePayload,
     EditPointPayload,
     ExportResponse,
@@ -403,6 +404,86 @@ class JobService:
                     page.status = "deleted" if payload.deleted else "active"
 
             self._invalidate_export(job)
+            job.updated_at = datetime.now(timezone.utc)
+            self._save_jobs()
+            return self._to_response(job)
+
+    def suggest_page_crop(
+        self,
+        job_id: str,
+        page_id: str,
+        rotation: int = 0,
+    ) -> CropSuggestionResponse | None:
+        """Detect the paper region of a page; None means job/page not found."""
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return None
+            page = next((item for item in job.pages if item.id == page_id), None)
+            if page is None:
+                return None
+            source_url = page.source_image_url or page.image_url
+            if not source_url:
+                return None
+            source_path = self._resolve_storage_path(source_url)
+
+        image = cv2.imread(str(source_path))
+        if image is None:
+            return CropSuggestionResponse(crop=None)
+
+        # Compute in the rotated coordinate space, because page edits rotate
+        # first and crop second (see apply_page_edits).
+        rotated = rotate_image(image, rotation % 360)
+        box = suggest_document_crop_box(rotated)
+        if box is None:
+            return CropSuggestionResponse(crop=None)
+        x, y, width, height = box
+        return CropSuggestionResponse(
+            crop=CropBoxPayload(x=x, y=y, width=width, height=height)
+        )
+
+    def auto_crop_pages(self, job_id: str) -> JobResponse | None:
+        """Crop every active page to its detected paper region."""
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return None
+
+            cropped_count = 0
+            for page in job.pages:
+                if page.deleted:
+                    continue
+                if not page.source_image_url or not page.image_url or not page.thumbnail_url:
+                    continue
+                image = cv2.imread(str(self._resolve_storage_path(page.source_image_url)))
+                if image is None:
+                    continue
+                rotation = page.edits.rotation % 360
+                box = suggest_document_crop_box(rotate_image(image, rotation))
+                if box is None:
+                    continue
+                x, y, width, height = box
+                # Rotation/crop redefine the annotation coordinate space, so
+                # drawings/text/blurs cannot be carried over (same rule as the
+                # editor). The coordinate-free filter is preserved.
+                page.edits = PageEdits(
+                    rotation=rotation,
+                    crop=CropBox(x=x, y=y, width=width, height=height),
+                    filter=page.edits.filter,
+                )
+                self._render_page_artifacts(page)
+                self._invalidate_page_ocr(page)
+                cropped_count += 1
+
+            if cropped_count > 0:
+                job.notes.append(
+                    f"Auto-cropped {cropped_count} page(s) to the detected document area."
+                )
+                self._invalidate_export(job)
+            else:
+                job.notes.append(
+                    "Auto-crop found no page that needed cropping to a document area."
+                )
             job.updated_at = datetime.now(timezone.utc)
             self._save_jobs()
             return self._to_response(job)

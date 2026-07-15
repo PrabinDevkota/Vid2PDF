@@ -3,6 +3,7 @@ import {
   ArrowDown,
   ArrowUp,
   ClipboardCopy,
+  Crop,
   Download,
   FileText,
   GripVertical,
@@ -17,6 +18,7 @@ import { SectionCard } from "../../components/SectionCard";
 import { useToast } from "../../components/Toast";
 import {
   addManualPage,
+  autoCropPages,
   bulkUpdatePages,
   reorderPages,
   reprocessJob,
@@ -231,6 +233,19 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
     );
     if (ok) {
       toast("Rejected page restored into the session.", "success");
+    }
+  }
+
+  async function handleAutoCropAll() {
+    if (!job) {
+      return;
+    }
+    const ok = await runPageAction(
+      () => autoCropPages(job.id),
+      "Failed to auto-crop pages.",
+    );
+    if (ok) {
+      toast("Pages cropped to the detected document areas.", "success");
     }
   }
 
@@ -465,6 +480,16 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                   >
                     <RefreshCw size={14} aria-hidden="true" />
                     Re-process
+                  </button>
+                  <button
+                    className="secondary-button"
+                    disabled={isMutating || visiblePages.length === 0}
+                    onClick={() => void handleAutoCropAll()}
+                    title="Crop every page to its detected paper area, removing hands and background"
+                    type="button"
+                  >
+                    <Crop size={14} aria-hidden="true" />
+                    Auto-crop pages
                   </button>
                 </div>
               </div>

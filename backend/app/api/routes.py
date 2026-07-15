@@ -10,6 +10,7 @@ from app.schemas.job import (
     AddManualPageRequest,
     BulkUpdatePagesRequest,
     CreateJobFromUrlRequest,
+    CropSuggestionResponse,
     ExportResponse,
     JobResponse,
     OcrLanguagesResponse,
@@ -181,6 +182,25 @@ def bulk_update_pages(job_id: str, payload: BulkUpdatePagesRequest) -> JobRespon
     job = job_service.bulk_update_pages(job_id, payload)
     if job is None:
         raise HTTPException(status_code=404, detail="Job or pages not found")
+    return job
+
+
+@router.get(
+    "/jobs/{job_id}/pages/{page_id}/crop-suggestion",
+    response_model=CropSuggestionResponse,
+)
+def suggest_page_crop(job_id: str, page_id: str, rotation: int = 0) -> CropSuggestionResponse:
+    suggestion = job_service.suggest_page_crop(job_id, page_id, rotation)
+    if suggestion is None:
+        raise HTTPException(status_code=404, detail="Job or page not found")
+    return suggestion
+
+
+@router.post("/jobs/{job_id}/pages/autocrop", response_model=JobResponse)
+def auto_crop_pages(job_id: str) -> JobResponse:
+    job = job_service.auto_crop_pages(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
     return job
 
 
