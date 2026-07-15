@@ -1,8 +1,13 @@
+import { useState } from "react";
+import { Download, Layers, Loader2 } from "lucide-react";
 import { AppHeader } from "../../components/AppHeader";
 import { SectionCard } from "../../components/SectionCard";
 import { SessionsTable } from "../../components/SessionsTable";
+import { useToast } from "../../components/Toast";
 import { UploadPanel } from "../jobs/UploadPanel";
 import { useJobs } from "../../hooks/useJobs";
+import { exportMergedPdf, resolveArtifactUrl, type MergedExportResult } from "../../lib/api";
+import type { ProcessingJob } from "../../types";
 
 const RECORDING_TIPS = [
   {
@@ -22,6 +27,108 @@ const RECORDING_TIPS = [
     body: "Anything the pipeline skips can be pulled back from the Source video tab in review.",
   },
 ];
+
+function MergeSessionsCard({ jobs }: { jobs: ProcessingJob[] }) {
+  const { toast } = useToast();
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isMerging, setIsMerging] = useState(false);
+  const [result, setResult] = useState<MergedExportResult | null>(null);
+
+  const mergeableJobs = jobs.filter(
+    (job) => job.status === "ready" && job.pages.some((page) => !page.deleted),
+  );
+  if (mergeableJobs.length < 2) {
+    return null;
+  }
+
+  function toggle(jobId: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(jobId)) {
+        next.delete(jobId);
+      } else {
+        next.add(jobId);
+      }
+      return next;
+    });
+    setResult(null);
+  }
+
+  async function handleMerge() {
+    // Keep dashboard order so the combined document reads top to bottom.
+    const orderedIds = mergeableJobs
+      .filter((job) => selectedIds.has(job.id))
+      .map((job) => job.id);
+    if (orderedIds.length < 2) {
+      return;
+    }
+    setIsMerging(true);
+    setResult(null);
+    try {
+      const merged = await exportMergedPdf(orderedIds);
+      setResult(merged);
+      toast(
+        `Combined ${merged.jobCount} sessions into one ${merged.pageCount}-page PDF.`,
+        "success",
+      );
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Failed to build the combined PDF.", "error");
+    } finally {
+      setIsMerging(false);
+    }
+  }
+
+  const downloadUrl = result ? resolveArtifactUrl(result.downloadUrl) : null;
+
+  return (
+    <SectionCard
+      title="Combine sessions"
+      subtitle="Pick two or more finished sessions and export them as a single PDF."
+    >
+      <div className="merge-card">
+        <div className="merge-card__list">
+          {mergeableJobs.map((job) => (
+            <label className="merge-card__item" key={job.id}>
+              <input
+                checked={selectedIds.has(job.id)}
+                disabled={isMerging}
+                type="checkbox"
+                onChange={() => toggle(job.id)}
+              />
+              <span className="merge-card__name" title={job.filename}>
+                {job.filename}
+              </span>
+              <span className="muted">
+                {job.pages.filter((page) => !page.deleted).length} pages
+              </span>
+            </label>
+          ))}
+        </div>
+        <div className="review-toolbar">
+          <button
+            className="primary-button"
+            disabled={isMerging || selectedIds.size < 2}
+            onClick={() => void handleMerge()}
+            type="button"
+          >
+            {isMerging ? (
+              <Loader2 size={15} className="spin" aria-hidden="true" />
+            ) : (
+              <Layers size={15} aria-hidden="true" />
+            )}
+            Build combined PDF
+          </button>
+          {downloadUrl ? (
+            <a className="secondary-button" href={downloadUrl} target="_blank" rel="noreferrer">
+              <Download size={15} aria-hidden="true" />
+              Download ({result?.pageCount} pages)
+            </a>
+          ) : null}
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
 
 export function DashboardPage() {
   const {
@@ -97,6 +204,7 @@ export function DashboardPage() {
               onDeleteJob={handleJobDeleted}
             />
           </SectionCard>
+          <MergeSessionsCard jobs={jobs} />
           <SectionCard
             title="What you get"
             subtitle="Every session can produce two artifacts."

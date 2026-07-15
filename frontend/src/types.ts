@@ -50,6 +50,8 @@ export interface BlurRegion {
 
 export interface PageEdits {
   rotation: number;
+  /** Small straightening angle in degrees (-15..15). */
+  fineRotation: number;
   crop: CropBox | null;
   filter: PageFilter;
   /** -100..100; 0 leaves the page untouched. */
@@ -59,6 +61,9 @@ export interface PageEdits {
   texts: TextAnnotation[];
   blurRegions: BlurRegion[];
 }
+
+export type PageSizeOption = "auto" | "a4" | "letter";
+export type CameraOutput = "cleaned" | "color";
 
 export interface OcrBlock {
   text: string;
@@ -104,6 +109,7 @@ export interface ExtractedPage {
   ocrBlocks: OcrBlock[];
   ocrStatus: OcrStatus;
   ocrError: string | null;
+  ocrConfidence: number | null;
 }
 
 export interface RejectedFrame {
@@ -135,8 +141,11 @@ export interface ProcessingJob {
   sourceUrl?: string | null;
   ocrLanguage?: string;
   sensitivity?: Sensitivity;
+  cameraOutput?: CameraOutput;
   trimStart?: number | null;
   trimEnd?: number | null;
+  videoWidth?: number | null;
+  videoHeight?: number | null;
   status: JobStatus;
   createdAt: string;
   updatedAt: string;

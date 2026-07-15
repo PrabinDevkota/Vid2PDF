@@ -200,8 +200,17 @@ def build_export(
     pages: list[SelectedPage],
     output_dir: str,
     title: str | None = None,
+    page_size: str = "auto",
+    margin: str = "none",
 ) -> ExportArtifact:
-    return export_pdf(job_id=job_id, pages=pages, output_dir=output_dir, title=title)
+    return export_pdf(
+        job_id=job_id,
+        pages=pages,
+        output_dir=output_dir,
+        title=title,
+        page_size=page_size,
+        margin=margin,
+    )
 
 
 def build_text_export(

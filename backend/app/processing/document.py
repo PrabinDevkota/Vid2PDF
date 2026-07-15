@@ -564,6 +564,55 @@ def suggest_document_crop_box(image: np.ndarray) -> tuple[int, int, int, int] | 
     return left, top, crop_width, crop_height
 
 
+def estimate_skew_angle(image: np.ndarray) -> float | None:
+    """Estimate the small tilt of text lines, in degrees.
+
+    Returns the angle to pass to fine rotation so the lines become level
+    (positive = rotate counter-clockwise), or None when no confident set of
+    near-horizontal lines is found.
+    """
+    height, width = image.shape[:2]
+    if height < 80 or width < 80:
+        return None
+
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    scale = 900.0 / max(width, 1)
+    if scale < 1.0:
+        gray = cv2.resize(gray, (int(width * scale), int(height * scale)), interpolation=cv2.INTER_AREA)
+    edges = cv2.Canny(gray, 60, 160)
+    min_line_length = int(gray.shape[1] * 0.25)
+    lines = cv2.HoughLinesP(
+        edges,
+        rho=1,
+        theta=np.pi / 360,
+        threshold=60,
+        minLineLength=max(min_line_length, 40),
+        maxLineGap=8,
+    )
+    if lines is None:
+        return None
+
+    angles: list[float] = []
+    for line in lines[:, 0]:
+        x1, y1, x2, y2 = line
+        if x2 == x1:
+            continue
+        angle = float(np.degrees(np.arctan2(y2 - y1, x2 - x1)))
+        # Only near-horizontal structure (text lines, ruled paper).
+        if abs(angle) <= 12.0:
+            angles.append(angle)
+
+    if len(angles) < 3:
+        return None
+    tilt = float(np.median(angles))
+    if abs(tilt) < 0.15 or abs(tilt) > 12.0:
+        return None
+    # Image y grows downward, so a line with positive atan2 angle appears
+    # tilted clockwise; getRotationMatrix2D's positive angle rotates
+    # counter-clockwise, which undoes it.
+    return round(tilt, 2)
+
+
 def _border_white_ratio(mask: np.ndarray, border_size: int = 12) -> float:
     height, width = mask.shape[:2]
     border_size = max(1, min(border_size, height // 4, width // 4))

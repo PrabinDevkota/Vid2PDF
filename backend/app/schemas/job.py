@@ -46,6 +46,7 @@ PageFilterLiteral = Literal["none", "enhance", "grayscale", "bw"]
 
 class PageEditsPayload(BaseModel):
     rotation: int
+    fineRotation: float = Field(default=0.0, ge=-15.0, le=15.0)
     crop: CropBoxPayload | None
     filter: PageFilterLiteral = "none"
     brightness: int = Field(default=0, ge=-100, le=100)
@@ -57,6 +58,7 @@ class PageEditsPayload(BaseModel):
 
 class UpdatePageEditsPayload(BaseModel):
     rotation: int = 0
+    fineRotation: float = Field(default=0.0, ge=-15.0, le=15.0)
     crop: CropBoxPayload | None = None
     filter: PageFilterLiteral = "none"
     brightness: int = Field(default=0, ge=-100, le=100)
@@ -110,6 +112,7 @@ class PageResponse(BaseModel):
     ocrBlocks: list[OcrBlockPayload] = []
     ocrStatus: Literal["pending", "ready", "failed", "empty"] = "pending"
     ocrError: str | None = None
+    ocrConfidence: float | None = None
 
 
 class RejectedFrameResponse(BaseModel):
@@ -141,8 +144,11 @@ class JobResponse(BaseModel):
     sourceUrl: str | None = None
     ocrLanguage: str = "eng"
     sensitivity: Literal["fewer", "balanced", "more"] = "balanced"
+    cameraOutput: Literal["cleaned", "color"] = "cleaned"
     trimStart: float | None = None
     trimEnd: float | None = None
+    videoWidth: int | None = None
+    videoHeight: int | None = None
     status: Literal["queued", "processing", "ready", "failed", "cancelled"]
     createdAt: datetime
     updatedAt: datetime
@@ -163,6 +169,8 @@ class UpdatePageRequest(BaseModel):
     rotation: int | None = None
     deleted: bool | None = None
     edits: UpdatePageEditsPayload | None = None
+    # Manual OCR-text correction; replaces the extracted text for exports.
+    ocrText: str | None = None
 
 
 class BulkUpdatePagesRequest(BaseModel):
@@ -184,14 +192,46 @@ class CreateJobFromUrlRequest(BaseModel):
     processingMode: Literal["screen", "camera"] = "screen"
     ocrLanguage: str = "eng"
     sensitivity: Literal["fewer", "balanced", "more"] = "balanced"
+    cameraOutput: Literal["cleaned", "color"] = "cleaned"
     trimStart: float | None = None
     trimEnd: float | None = None
 
 
 class ReprocessJobRequest(BaseModel):
     sensitivity: Literal["fewer", "balanced", "more"] | None = None
+    cameraOutput: Literal["cleaned", "color"] | None = None
     trimStart: float | None = None
     trimEnd: float | None = None
+
+
+PageSizeLiteral = Literal["auto", "a4", "letter"]
+MarginLiteral = Literal["none", "small"]
+
+
+class ExportOptionsRequest(BaseModel):
+    """Options for the image PDF export; defaults preserve prior behavior."""
+
+    pageSize: PageSizeLiteral = "auto"
+    margin: MarginLiteral = "none"
+
+
+class MergedExportRequest(BaseModel):
+    jobIds: list[str] = Field(min_length=1)
+    pageSize: PageSizeLiteral = "auto"
+    margin: MarginLiteral = "none"
+
+
+class MergedExportResponse(BaseModel):
+    filename: str
+    downloadUrl: str
+    pageCount: int
+    jobCount: int
+
+
+class SkewSuggestionResponse(BaseModel):
+    """Auto-detected straightening angle; null when no tilt was found."""
+
+    angle: float | None = None
 
 
 class CropSuggestionResponse(BaseModel):

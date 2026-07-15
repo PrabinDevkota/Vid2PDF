@@ -25,6 +25,7 @@ import {
   resolveArtifactUrl,
   restoreRejectedFrame,
   updatePage,
+  updatePageOcrText,
 } from "../../lib/api";
 import { PageEditorModal } from "./PageEditorModal";
 import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
@@ -80,6 +81,8 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
   const [sensitivity, setSensitivity] = useState<Sensitivity>("balanced");
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [editingTextPageId, setEditingTextPageId] = useState<string | null>(null);
+  const [textDraft, setTextDraft] = useState("");
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const visiblePages = job?.pages.filter((page) => !page.deleted) ?? [];
@@ -260,6 +263,20 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
     );
     if (ok) {
       toast("Pages cropped to the detected document areas.", "success");
+    }
+  }
+
+  async function handleSaveOcrText(pageId: string) {
+    if (!job) {
+      return;
+    }
+    const ok = await runPageAction(
+      () => updatePageOcrText(job.id, pageId, textDraft),
+      "Failed to save the corrected text.",
+    );
+    if (ok) {
+      setEditingTextPageId(null);
+      toast("Text updated. Exports will use your correction.", "success");
     }
   }
 
@@ -643,21 +660,24 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
 
         {activeTab === "text" ? (
           <div className="review-tab-panel" role="tabpanel">
-            {pagesWithText.length === 0 ? (
+            {visiblePages.length === 0 ? (
               <div className="empty-state">
                 <FileText size={24} aria-hidden="true" />
                 <strong>No extracted text yet</strong>
-                <p>
-                  {visiblePages.length === 0
-                    ? "There are no pages to extract text from."
-                    : "Text appears here after OCR runs. Pages edited recently are re-read during the next text export."}
-                </p>
+                <p>There are no pages to extract text from.</p>
               </div>
             ) : (
               <div className="ocr-text-list">
+                {pagesWithText.length === 0 ? (
+                  <p className="muted">
+                    No text was recognized yet — OCR runs during exports, or you can type the
+                    text for any page below (useful for handwriting).
+                  </p>
+                ) : null}
                 <div className="review-toolbar">
                   <button
                     className="secondary-button"
+                    disabled={pagesWithText.length === 0}
                     onClick={() => void handleCopyText()}
                     type="button"
                   >
@@ -666,6 +686,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                   </button>
                   <button
                     className="secondary-button"
+                    disabled={pagesWithText.length === 0}
                     onClick={handleDownloadText}
                     type="button"
                   >
@@ -677,6 +698,17 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                   <article className="ocr-text-card" key={page.id}>
                     <header>
                       <strong>Page {index + 1}</strong>
+                      {page.ocrConfidence != null ? (
+                        <span
+                          className={`confidence-badge ${
+                            page.ocrConfidence < 60 ? "confidence-badge--low" : ""
+                          }`}
+                          title="Average OCR word confidence — low values usually mean handwriting or blur; edit the text to correct it"
+                        >
+                          {page.ocrConfidence < 60 ? "low confidence · " : "confidence "}
+                          {Math.round(page.ocrConfidence)}%
+                        </span>
+                      ) : null}
                       {page.ocrStatus === "ready" && page.ocrText ? (
                         <span className="muted">{page.ocrText.length} characters</span>
                       ) : (
@@ -688,8 +720,48 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                               : "Pending OCR"}
                         </span>
                       )}
+                      {editingTextPageId !== page.id ? (
+                        <button
+                          className="secondary-button"
+                          disabled={isMutating}
+                          onClick={() => {
+                            setEditingTextPageId(page.id);
+                            setTextDraft(page.ocrText ?? "");
+                          }}
+                          type="button"
+                        >
+                          <Pencil size={13} aria-hidden="true" />
+                          Edit text
+                        </button>
+                      ) : null}
                     </header>
-                    {page.ocrStatus === "ready" && page.ocrText ? (
+                    {editingTextPageId === page.id ? (
+                      <div className="ocr-text-card__editor">
+                        <textarea
+                          aria-label={`Corrected text for page ${index + 1}`}
+                          value={textDraft}
+                          onChange={(event) => setTextDraft(event.target.value)}
+                        />
+                        <div className="review-toolbar">
+                          <button
+                            className="primary-button"
+                            disabled={isMutating}
+                            onClick={() => void handleSaveOcrText(page.id)}
+                            type="button"
+                          >
+                            Save text
+                          </button>
+                          <button
+                            className="secondary-button"
+                            disabled={isMutating}
+                            onClick={() => setEditingTextPageId(null)}
+                            type="button"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : page.ocrStatus === "ready" && page.ocrText ? (
                       <p>{page.ocrText}</p>
                     ) : null}
                   </article>
@@ -937,6 +1009,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
 function hasEdits(page: ExtractedPage): boolean {
   return (
     page.edits.rotation !== 0 ||
+    (page.edits.fineRotation ?? 0) !== 0 ||
     page.edits.crop !== null ||
     (page.edits.filter ?? "none") !== "none" ||
     (page.edits.brightness ?? 0) !== 0 ||

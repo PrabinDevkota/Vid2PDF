@@ -1,4 +1,12 @@
-import type { CropBox, PageEdits, ProcessingJob, ProcessingMode, Sensitivity } from "../types";
+import type {
+  CameraOutput,
+  CropBox,
+  PageEdits,
+  PageSizeOption,
+  ProcessingJob,
+  ProcessingMode,
+  Sensitivity,
+} from "../types";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ||
@@ -36,11 +44,13 @@ export async function uploadVideo(
   processingMode: ProcessingMode,
   ocrLanguage = "eng",
   trim: TrimRange = {},
+  cameraOutput: CameraOutput = "cleaned",
 ): Promise<ProcessingJob> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("processing_mode", processingMode);
   formData.append("ocr_language", ocrLanguage);
+  formData.append("camera_output", cameraOutput);
   if (trim.trimStart != null) {
     formData.append("trim_start", String(trim.trimStart));
   }
@@ -61,6 +71,7 @@ export async function createJobFromUrl(
   processingMode: ProcessingMode,
   ocrLanguage = "eng",
   trim: TrimRange = {},
+  cameraOutput: CameraOutput = "cleaned",
 ): Promise<ProcessingJob> {
   const response = await fetch(`${API_BASE_URL}/api/jobs/from-url`, {
     method: "POST",
@@ -71,6 +82,7 @@ export async function createJobFromUrl(
       url,
       processingMode,
       ocrLanguage,
+      cameraOutput,
       trimStart: trim.trimStart ?? null,
       trimEnd: trim.trimEnd ?? null,
     }),
@@ -134,11 +146,60 @@ export async function fetchCropSuggestion(
   jobId: string,
   pageId: string,
   rotation: number,
+  fineRotation = 0,
 ): Promise<{ crop: CropBox | null }> {
   const response = await fetch(
-    `${API_BASE_URL}/api/jobs/${jobId}/pages/${pageId}/crop-suggestion?rotation=${rotation}`,
+    `${API_BASE_URL}/api/jobs/${jobId}/pages/${pageId}/crop-suggestion` +
+      `?rotation=${rotation}&fineRotation=${fineRotation}`,
   );
   return readJson<{ crop: CropBox | null }>(response, "Failed to detect the document area");
+}
+
+export async function fetchSkewSuggestion(
+  jobId: string,
+  pageId: string,
+  rotation: number,
+): Promise<{ angle: number | null }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/jobs/${jobId}/pages/${pageId}/skew-suggestion?rotation=${rotation}`,
+  );
+  return readJson<{ angle: number | null }>(response, "Failed to detect the page tilt");
+}
+
+export async function updatePageOcrText(
+  jobId: string,
+  pageId: string,
+  ocrText: string,
+): Promise<ProcessingJob> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/pages/${pageId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ ocrText }),
+  });
+  return readJson<ProcessingJob>(response, "Failed to save the corrected text");
+}
+
+export interface MergedExportResult {
+  filename: string;
+  downloadUrl: string;
+  pageCount: number;
+  jobCount: number;
+}
+
+export async function exportMergedPdf(
+  jobIds: string[],
+  pageSize: PageSizeOption = "auto",
+): Promise<MergedExportResult> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/export/merged`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ jobIds, pageSize, margin: pageSize === "auto" ? "none" : "small" }),
+  });
+  return readJson<MergedExportResult>(response, "Failed to build the combined PDF");
 }
 
 export async function autoCropPages(jobId: string): Promise<ProcessingJob> {
@@ -210,9 +271,19 @@ export async function deleteJob(jobId: string): Promise<void> {
   }
 }
 
-export async function startExport(jobId: string): Promise<ProcessingJob["export"]> {
+export async function startExport(
+  jobId: string,
+  pageSize: PageSizeOption = "auto",
+): Promise<ProcessingJob["export"]> {
   const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/export`, {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      pageSize,
+      margin: pageSize === "auto" ? "none" : "small",
+    }),
   });
 
   return readJson<ProcessingJob["export"]>(response, "Failed to start export");

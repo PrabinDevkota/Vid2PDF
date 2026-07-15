@@ -4,7 +4,12 @@ from app.core.settings import settings
 from app.processing.types import PipelineContext
 
 
-def build_pipeline_context(job_id: str, upload_path: str, processing_mode: str) -> PipelineContext:
+def build_pipeline_context(
+    job_id: str,
+    upload_path: str,
+    processing_mode: str,
+    camera_output: str = "cleaned",
+) -> PipelineContext:
     job_root = Path(settings.storage_path) / "jobs" / job_id
     source_page_dir = job_root / "source-pages"
     page_dir = job_root / "pages"
@@ -22,4 +27,5 @@ def build_pipeline_context(job_id: str, upload_path: str, processing_mode: str) 
         debug_report_path=str(debug_report_path),
         artifact_base_url=settings.public_artifact_base_url,
         processing_mode=processing_mode,  # type: ignore[arg-type]
+        camera_output=camera_output if camera_output in {"cleaned", "color"} else "cleaned",
     )

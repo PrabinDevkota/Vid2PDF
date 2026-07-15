@@ -11,11 +11,15 @@ from app.schemas.job import (
     BulkUpdatePagesRequest,
     CreateJobFromUrlRequest,
     CropSuggestionResponse,
+    ExportOptionsRequest,
     ExportResponse,
     JobResponse,
+    MergedExportRequest,
+    MergedExportResponse,
     OcrLanguagesResponse,
     ReorderPagesRequest,
     ReprocessJobRequest,
+    SkewSuggestionResponse,
     UpdatePageRequest,
 )
 from app.services.job_service import JobNotCancellableError, job_service
@@ -84,6 +88,7 @@ async def upload_job(
     processing_mode: Literal["screen", "camera"] = Form("screen"),
     ocr_language: str = Form("eng"),
     sensitivity: Literal["fewer", "balanced", "more"] = Form("balanced"),
+    camera_output: Literal["cleaned", "color"] = Form("cleaned"),
     trim_start: float | None = Form(None),
     trim_end: float | None = Form(None),
 ) -> JobResponse:
@@ -95,6 +100,7 @@ async def upload_job(
         sensitivity,
         trim_start=trim_start,
         trim_end=trim_end,
+        camera_output=camera_output,
     )
 
 
@@ -108,6 +114,7 @@ def create_job_from_url(payload: CreateJobFromUrlRequest) -> JobResponse:
         sensitivity=payload.sensitivity,
         trim_start=payload.trimStart,
         trim_end=payload.trimEnd,
+        camera_output=payload.cameraOutput,
     )
     if job is None:
         raise HTTPException(status_code=400, detail="Enter a valid http(s) video URL.")
@@ -122,6 +129,7 @@ def reprocess_job(job_id: str, payload: ReprocessJobRequest) -> JobResponse:
         payload.sensitivity,
         trim_start=payload.trimStart,
         trim_end=payload.trimEnd,
+        camera_output=payload.cameraOutput,
     )
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found or has no stored video")
@@ -146,11 +154,22 @@ def delete_job(job_id: str) -> None:
 
 
 @router.post("/jobs/{job_id}/export", response_model=ExportResponse)
-def export_job(job_id: str) -> ExportResponse:
-    export_result = job_service.export_job(job_id)
+def export_job(job_id: str, options: ExportOptionsRequest | None = None) -> ExportResponse:
+    export_result = job_service.export_job(job_id, options)
     if export_result is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return export_result
+
+
+@router.post("/jobs/export/merged", response_model=MergedExportResponse)
+def export_merged(payload: MergedExportRequest) -> MergedExportResponse:
+    try:
+        result = job_service.export_merged(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if result is None:
+        raise HTTPException(status_code=404, detail="One or more sessions were not found")
+    return result
 
 
 @router.post("/jobs/{job_id}/export/text", response_model=ExportResponse)
@@ -189,8 +208,24 @@ def bulk_update_pages(job_id: str, payload: BulkUpdatePagesRequest) -> JobRespon
     "/jobs/{job_id}/pages/{page_id}/crop-suggestion",
     response_model=CropSuggestionResponse,
 )
-def suggest_page_crop(job_id: str, page_id: str, rotation: int = 0) -> CropSuggestionResponse:
-    suggestion = job_service.suggest_page_crop(job_id, page_id, rotation)
+def suggest_page_crop(
+    job_id: str,
+    page_id: str,
+    rotation: int = 0,
+    fineRotation: float = 0.0,
+) -> CropSuggestionResponse:
+    suggestion = job_service.suggest_page_crop(job_id, page_id, rotation, fineRotation)
+    if suggestion is None:
+        raise HTTPException(status_code=404, detail="Job or page not found")
+    return suggestion
+
+
+@router.get(
+    "/jobs/{job_id}/pages/{page_id}/skew-suggestion",
+    response_model=SkewSuggestionResponse,
+)
+def suggest_page_skew(job_id: str, page_id: str, rotation: int = 0) -> SkewSuggestionResponse:
+    suggestion = job_service.suggest_page_skew(job_id, page_id, rotation)
     if suggestion is None:
         raise HTTPException(status_code=404, detail="Job or page not found")
     return suggestion

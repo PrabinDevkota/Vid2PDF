@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link2, Loader2, Upload, X } from "lucide-react";
-import type { ProcessingJob, ProcessingMode } from "../../types";
+import type { CameraOutput, ProcessingJob, ProcessingMode } from "../../types";
 import { createJobFromUrl, fetchOcrLanguages, uploadVideo } from "../../lib/api";
 import { SectionCard } from "../../components/SectionCard";
 import { useToast } from "../../components/Toast";
@@ -60,6 +60,7 @@ export function UploadPanel({ onJobCreated, compact }: UploadPanelProps) {
   const [failedIndexes, setFailedIndexes] = useState<Set<number>>(new Set());
   const [videoUrl, setVideoUrl] = useState("");
   const [processingMode, setProcessingMode] = useState<ProcessingMode>("screen");
+  const [cameraOutput, setCameraOutput] = useState<CameraOutput>("cleaned");
   const [ocrLanguage, setOcrLanguage] = useState("eng");
   const [languages, setLanguages] = useState<string[]>(["eng"]);
   const [trimStartText, setTrimStartText] = useState("");
@@ -155,7 +156,13 @@ export function UploadPanel({ onJobCreated, compact }: UploadPanelProps) {
 
     if (sourceKind === "url") {
       try {
-        const job = await createJobFromUrl(videoUrl.trim(), processingMode, ocrLanguage, trim);
+        const job = await createJobFromUrl(
+          videoUrl.trim(),
+          processingMode,
+          ocrLanguage,
+          trim,
+          cameraOutput,
+        );
         onJobCreated(job);
         toast("Session created — downloading the video.", "success");
         setVideoUrl("");
@@ -179,7 +186,13 @@ export function UploadPanel({ onJobCreated, compact }: UploadPanelProps) {
     for (let index = 0; index < selectedFiles.length; index += 1) {
       setUploadingIndex(index);
       try {
-        const job = await uploadVideo(selectedFiles[index], processingMode, ocrLanguage, trim);
+        const job = await uploadVideo(
+          selectedFiles[index],
+          processingMode,
+          ocrLanguage,
+          trim,
+          cameraOutput,
+        );
         if (!firstJob) {
           firstJob = job;
         }
@@ -392,6 +405,33 @@ export function UploadPanel({ onJobCreated, compact }: UploadPanelProps) {
               </button>
             </div>
           </label>
+          {processingMode === "camera" ? (
+            <label className="upload-option">
+              <span>Camera page style</span>
+              <div className="mode-selector" role="tablist" aria-label="Camera output style">
+                <button
+                  className={`mode-pill ${cameraOutput === "cleaned" ? "active" : ""}`}
+                  onClick={() => setCameraOutput("cleaned")}
+                  role="tab"
+                  aria-selected={cameraOutput === "cleaned"}
+                  title="Black-and-white scan look with a whitened background"
+                  type="button"
+                >
+                  Cleaned scan
+                </button>
+                <button
+                  className={`mode-pill ${cameraOutput === "color" ? "active" : ""}`}
+                  onClick={() => setCameraOutput("color")}
+                  role="tab"
+                  aria-selected={cameraOutput === "color"}
+                  title="Keep the original colors of the captured page"
+                  type="button"
+                >
+                  Original color
+                </button>
+              </div>
+            </label>
+          ) : null}
           <label className="upload-option">
             <span>Document language</span>
             <select

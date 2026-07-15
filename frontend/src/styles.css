@@ -1536,6 +1536,96 @@ input:focus-visible {
   touch-action: none;
 }
 
+.editor-zoom-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.editor-zoom-bar__value {
+  min-width: 44px;
+  text-align: center;
+  color: var(--text-soft);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.editor-canvas-scroll--zoomed {
+  overflow: auto;
+  max-height: 68vh;
+}
+
+.editor-canvas--zoomed {
+  max-width: none;
+  margin: 0;
+}
+
+.ocr-text-card__editor {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.ocr-text-card__editor textarea {
+  width: 100%;
+  min-height: 140px;
+  resize: vertical;
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.confidence-badge {
+  font-size: var(--text-xs);
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text-soft);
+}
+
+.confidence-badge--low {
+  background: color-mix(in srgb, #dc2626 12%, transparent);
+  color: #dc2626;
+}
+
+.merge-card {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.merge-card__list {
+  display: grid;
+  gap: var(--space-1);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.merge-card__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.merge-card__item:hover {
+  background: var(--surface-muted);
+}
+
+.merge-card__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+}
+
 /* Settings */
 
 .settings-grid {

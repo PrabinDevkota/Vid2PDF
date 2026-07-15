@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import queue
 import shutil
 from concurrent.futures import ThreadPoolExecutor
@@ -34,9 +35,14 @@ from app.processing.cancellation import JobCancelledError
 from app.processing.context import build_pipeline_context
 from app.processing.deduper import remove_duplicates
 from app.processing.debug import write_pipeline_debug_report
-from app.processing.document import detect_document_region, suggest_document_crop_box
+from app.processing.document import (
+    detect_document_region,
+    estimate_skew_angle,
+    suggest_document_crop_box,
+)
 from app.processing.downloader import download_video, is_valid_video_url
-from app.processing.editor import rotate_image, write_rendered_page
+from app.processing.editor import fine_rotate_image, rotate_image, write_rendered_page
+from app.processing.exporter import export_merged_pdf
 from app.processing.ocr import (
     PageText,
     TextBlock,
@@ -70,14 +76,18 @@ from app.schemas.job import (
     CropSuggestionResponse,
     DrawStrokePayload,
     EditPointPayload,
+    ExportOptionsRequest,
     ExportResponse,
     JobResponse,
+    MergedExportRequest,
+    MergedExportResponse,
     OcrBlockPayload,
     PageResponse,
     PageEditsPayload,
     ProgressResponse,
     RejectedFrameResponse,
     ReorderPagesRequest,
+    SkewSuggestionResponse,
     StageResponse,
     TextAnnotationPayload,
     UpdatePageRequest,
@@ -108,6 +118,94 @@ class JobService:
         self._jobs_root.mkdir(parents=True, exist_ok=True)
         self._load_jobs()
         self._recover_interrupted_jobs()
+        self._cleanup_storage()
+
+    def _cleanup_storage(self) -> None:
+        """Startup housekeeping: drop orphaned artifacts and apply retention.
+
+        - Uploads and job directories no job references anymore are removed.
+        - When settings.upload_retention_days > 0, source videos of jobs that
+          finished more than that many days ago are deleted (pages and
+          exports are kept; re-processing then requires a fresh upload).
+        """
+        with self._lock:
+            if self._state_path.exists() and not self._jobs:
+                # A state file that parsed to zero jobs may be corrupt; do not
+                # treat every artifact on disk as orphaned in that case.
+                return
+            referenced_uploads = {
+                Path(job.upload_path).resolve()
+                for job in self._jobs.values()
+                if job.upload_path
+            }
+            job_ids = set(self._jobs)
+
+            removed_uploads = 0
+            for file in self._uploads_root.iterdir():
+                if file.is_file() and file.resolve() not in referenced_uploads:
+                    try:
+                        file.unlink()
+                        removed_uploads += 1
+                    except OSError:
+                        pass
+
+            removed_dirs = 0
+            for job_dir in self._jobs_root.iterdir():
+                if job_dir.is_dir() and job_dir.name not in job_ids:
+                    shutil.rmtree(job_dir, ignore_errors=True)
+                    removed_dirs += 1
+
+            # Backfill source-video dimensions for jobs created before the
+            # fields existed, so the low-resolution notice can appear.
+            backfilled = 0
+            for job in self._jobs.values():
+                if (
+                    job.video_width is None
+                    and job.upload_path
+                    and Path(job.upload_path).is_file()
+                ):
+                    try:
+                        metadata = load_video_metadata(job.upload_path)
+                    except Exception:
+                        continue
+                    job.video_width = metadata.width
+                    job.video_height = metadata.height
+                    backfilled += 1
+            if backfilled:
+                self._save_jobs()
+
+            retained = 0
+            retention_days = settings.upload_retention_days
+            if retention_days > 0:
+                cutoff = datetime.now(timezone.utc).timestamp() - retention_days * 86400
+                for job in self._jobs.values():
+                    if not job.upload_path or job.status in {"queued", "processing"}:
+                        continue
+                    finished_at = job.completed_at or job.updated_at
+                    if finished_at is None or finished_at.timestamp() > cutoff:
+                        continue
+                    upload_file = Path(job.upload_path)
+                    if upload_file.is_file():
+                        try:
+                            upload_file.unlink()
+                        except OSError:
+                            continue
+                    job.upload_path = None
+                    job.notes.append(
+                        f"Source video removed by the {retention_days}-day retention policy."
+                    )
+                    retained += 1
+                if retained:
+                    self._save_jobs()
+
+            if removed_uploads or removed_dirs or retained:
+                logger.info(
+                    "Storage cleanup: removed %s orphaned upload(s), %s orphaned job dir(s), "
+                    "expired %s source video(s).",
+                    removed_uploads,
+                    removed_dirs,
+                    retained,
+                )
 
     def list_jobs(self) -> list[JobResponse]:
         with self._lock:
@@ -127,6 +225,7 @@ class JobService:
         sensitivity: str = "balanced",
         trim_start: float | None = None,
         trim_end: float | None = None,
+        camera_output: str = "cleaned",
     ) -> JobResponse:
         job_id = uuid4().hex[:12]
         created_at = datetime.now(timezone.utc)
@@ -150,6 +249,7 @@ class JobService:
             upload_path=str(upload_path),
             ocr_language=sanitize_language(ocr_language),
             sensitivity=self._sanitize_sensitivity(sensitivity),
+            camera_output=self._sanitize_camera_output(camera_output),
             trim_start=trim_start,
             trim_end=trim_end,
         )
@@ -169,6 +269,7 @@ class JobService:
         sensitivity: str = "balanced",
         trim_start: float | None = None,
         trim_end: float | None = None,
+        camera_output: str = "cleaned",
     ) -> JobResponse | None:
         url = url.strip()
         if not is_valid_video_url(url):
@@ -193,6 +294,7 @@ class JobService:
             source_url=url,
             ocr_language=sanitize_language(ocr_language),
             sensitivity=self._sanitize_sensitivity(sensitivity),
+            camera_output=self._sanitize_camera_output(camera_output),
             trim_start=trim_start,
             trim_end=trim_end,
         )
@@ -307,6 +409,7 @@ class JobService:
         sensitivity: str | None = None,
         trim_start: float | None = None,
         trim_end: float | None = None,
+        camera_output: str | None = None,
     ) -> JobResponse | None:
         with self._lock:
             job = self._jobs.get(job_id)
@@ -317,6 +420,8 @@ class JobService:
 
             if sensitivity is not None:
                 job.sensitivity = self._sanitize_sensitivity(sensitivity)
+            if camera_output is not None:
+                job.camera_output = self._sanitize_camera_output(camera_output)
             if trim_start is not None or trim_end is not None:
                 job.trim_start = trim_start
                 job.trim_end = trim_end
@@ -344,6 +449,10 @@ class JobService:
     def _sanitize_sensitivity(sensitivity: str | None) -> str:
         return sensitivity if sensitivity in {"fewer", "balanced", "more"} else "balanced"
 
+    @staticmethod
+    def _sanitize_camera_output(camera_output: str | None) -> str:
+        return camera_output if camera_output in {"cleaned", "color"} else "cleaned"
+
     def update_page(self, job_id: str, page_id: str, payload: UpdatePageRequest) -> JobResponse | None:
         with self._lock:
             job = self._jobs.get(job_id)
@@ -364,6 +473,14 @@ class JobService:
             if payload.deleted is not None:
                 page.deleted = payload.deleted
                 page.status = "deleted" if payload.deleted else "active"
+            if payload.ocrText is not None:
+                # Manual correction: trust the user's text for future exports.
+                cleaned_text = payload.ocrText.strip()
+                page.ocr_text = cleaned_text or None
+                page.ocr_blocks = []
+                page.ocr_status = "ready" if cleaned_text else "empty"
+                page.ocr_error = None
+                page.ocr_confidence = None
 
             if needs_rerender and page.source_image_url and page.image_url and page.thumbnail_url:
                 self._render_page_artifacts(page)
@@ -408,13 +525,18 @@ class JobService:
             self._save_jobs()
             return self._to_response(job)
 
-    def suggest_page_crop(
+    def _load_rotated_source(
         self,
         job_id: str,
         page_id: str,
-        rotation: int = 0,
-    ) -> CropSuggestionResponse | None:
-        """Detect the paper region of a page; None means job/page not found."""
+        rotation: int,
+        fine_rotation: float,
+    ):
+        """Source page image in the coordinate space edits are applied in.
+
+        Returns None when the job/page is unknown, and (page, image|None)
+        otherwise; edits rotate coarse, then fine, then crop.
+        """
         with self._lock:
             job = self._jobs.get(job_id)
             if job is None:
@@ -429,18 +551,47 @@ class JobService:
 
         image = cv2.imread(str(source_path))
         if image is None:
+            return page, None
+        rotated = rotate_image(image, rotation % 360)
+        return page, fine_rotate_image(rotated, fine_rotation)
+
+    def suggest_page_crop(
+        self,
+        job_id: str,
+        page_id: str,
+        rotation: int = 0,
+        fine_rotation: float = 0.0,
+    ) -> CropSuggestionResponse | None:
+        """Detect the paper region of a page; None means job/page not found."""
+        loaded = self._load_rotated_source(job_id, page_id, rotation, fine_rotation)
+        if loaded is None:
+            return None
+        _, image = loaded
+        if image is None:
             return CropSuggestionResponse(crop=None)
 
-        # Compute in the rotated coordinate space, because page edits rotate
-        # first and crop second (see apply_page_edits).
-        rotated = rotate_image(image, rotation % 360)
-        box = suggest_document_crop_box(rotated)
+        box = suggest_document_crop_box(image)
         if box is None:
             return CropSuggestionResponse(crop=None)
         x, y, width, height = box
         return CropSuggestionResponse(
             crop=CropBoxPayload(x=x, y=y, width=width, height=height)
         )
+
+    def suggest_page_skew(
+        self,
+        job_id: str,
+        page_id: str,
+        rotation: int = 0,
+    ) -> SkewSuggestionResponse | None:
+        """Estimate the straightening angle; None means job/page not found."""
+        loaded = self._load_rotated_source(job_id, page_id, rotation, 0.0)
+        if loaded is None:
+            return None
+        _, image = loaded
+        if image is None:
+            return SkewSuggestionResponse(angle=None)
+        return SkewSuggestionResponse(angle=estimate_skew_angle(image))
 
     def auto_crop_pages(self, job_id: str) -> JobResponse | None:
         """Crop every active page to its detected paper region."""
@@ -459,15 +610,18 @@ class JobService:
                 if image is None:
                     continue
                 rotation = page.edits.rotation % 360
-                box = suggest_document_crop_box(rotate_image(image, rotation))
+                fine_rotation = page.edits.fine_rotation
+                oriented = fine_rotate_image(rotate_image(image, rotation), fine_rotation)
+                box = suggest_document_crop_box(oriented)
                 if box is None:
                     continue
                 x, y, width, height = box
                 # Rotation/crop redefine the annotation coordinate space, so
                 # drawings/text/blurs cannot be carried over (same rule as the
-                # editor). The coordinate-free filter is preserved.
+                # editor). Coordinate-free settings are preserved.
                 page.edits = PageEdits(
                     rotation=rotation,
+                    fine_rotation=fine_rotation,
                     crop=CropBox(x=x, y=y, width=width, height=height),
                     filter=page.edits.filter,
                     brightness=page.edits.brightness,
@@ -497,6 +651,7 @@ class JobService:
                 return None
             upload_path = job.upload_path
             processing_mode = job.processing_mode
+            camera_output = job.camera_output
             ocr_language = job.ocr_language
 
         frame_index, timestamp, frame = self._extract_video_frame(upload_path, payload.timestampSeconds)
@@ -539,7 +694,12 @@ class JobService:
                 "Manual recovery page created from the current video frame.",
             ],
         )
-        context = build_pipeline_context(job_id=job_id, upload_path=upload_path, processing_mode=processing_mode)
+        context = build_pipeline_context(
+            job_id=job_id,
+            upload_path=upload_path,
+            processing_mode=processing_mode,
+            camera_output=camera_output,
+        )
         attach_previews([manual_page], context=context)
         ocr_result = extract_page_text(
             manual_page.image_path,
@@ -638,6 +798,7 @@ class JobService:
                 return None
             upload_path = job.upload_path or ""
             processing_mode = job.processing_mode
+            camera_output = job.camera_output
             ocr_language = job.ocr_language
 
         image_path = self._resolve_storage_path(rejected.image_url)
@@ -675,6 +836,7 @@ class JobService:
             job_id=job_id,
             upload_path=upload_path,
             processing_mode=processing_mode,
+            camera_output=camera_output,
         )
         attach_previews([restored_page], context=context)
         ocr_result = extract_page_text(
@@ -780,7 +942,11 @@ class JobService:
         self._publish_deleted(job_id)
         return True
 
-    def export_job(self, job_id: str) -> ExportResponse | None:
+    def export_job(
+        self,
+        job_id: str,
+        options: ExportOptionsRequest | None = None,
+    ) -> ExportResponse | None:
         with self._lock:
             job = self._jobs.get(job_id)
             if job is None:
@@ -798,8 +964,50 @@ class JobService:
             job.updated_at = now
             self._save_jobs()
 
-        self._executor.submit(self._run_export_job, job_id)
+        self._executor.submit(self._run_export_job, job_id, options or ExportOptionsRequest())
         return self._to_export_response(job.export)
+
+    def export_merged(self, payload: MergedExportRequest) -> MergedExportResponse | None:
+        """Combine the active pages of several jobs into one PDF.
+
+        Returns None when any requested job is unknown; raises ValueError when
+        the selection has no exportable pages.
+        """
+        with self._lock:
+            image_paths: list[str] = []
+            job_count = 0
+            for job_id in payload.jobIds:
+                job = self._jobs.get(job_id)
+                if job is None:
+                    return None
+                active_pages = [
+                    page
+                    for page in sorted(job.pages, key=lambda item: item.order_index)
+                    if not page.deleted and page.image_url
+                ]
+                if not active_pages:
+                    continue
+                job_count += 1
+                image_paths.extend(
+                    str(self._resolve_storage_path(page.image_url)) for page in active_pages
+                )
+
+        if not image_paths:
+            raise ValueError("None of the selected sessions has exportable pages.")
+
+        artifact = export_merged_pdf(
+            image_paths,
+            str(self._exports_root),
+            title=f"Vid2PDF combined export ({job_count} sessions)",
+            page_size=payload.pageSize,
+            margin=payload.margin,
+        )
+        return MergedExportResponse(
+            filename=artifact.filename,
+            downloadUrl=f"{settings.public_artifact_base_url}/exports/{artifact.filename}",
+            pageCount=artifact.page_count,
+            jobCount=job_count,
+        )
 
     def export_text_job(self, job_id: str) -> ExportResponse | None:
         with self._lock:
@@ -922,6 +1130,7 @@ class JobService:
                 upload_path = job.upload_path
                 processing_mode = job.processing_mode
                 sensitivity = job.sensitivity
+                camera_output = job.camera_output
                 ocr_language = job.ocr_language
                 trim_start = job.trim_start
                 trim_end = job.trim_end
@@ -932,12 +1141,17 @@ class JobService:
                 job_id=job_id,
                 upload_path=upload_path,
                 processing_mode=processing_mode,
+                camera_output=camera_output,
             )
             settings_for_mode = mode_settings(processing_mode, sensitivity)
             pipeline_notes: list[str] = []
 
             self._start_stage(job_id, "sample_frames", "Sampling frames from the uploaded video.", 8)
             metadata = load_video_metadata(upload_path)
+            with self._lock:
+                job = self._jobs[job_id]
+                job.video_width = metadata.width
+                job.video_height = metadata.height
             if trim_start is not None or trim_end is not None:
                 shown_start = max(trim_start or 0.0, 0.0)
                 shown_end = trim_end if trim_end is not None else metadata.duration_seconds
@@ -962,6 +1176,7 @@ class JobService:
                     job_id=job_id,
                     upload_path=upload_path,
                     processing_mode="screen",
+                    camera_output=camera_output,
                 )
                 settings_for_mode = mode_settings("screen", sensitivity)
                 sampled_frames = sample_frames(
@@ -1149,7 +1364,8 @@ class JobService:
                     current_stage.status = "failed"
                 self._save_jobs()
 
-    def _run_export_job(self, job_id: str) -> None:
+    def _run_export_job(self, job_id: str, options: ExportOptionsRequest | None = None) -> None:
+        options = options or ExportOptionsRequest()
         with self._lock:
             job = self._jobs.get(job_id)
             if job is None:
@@ -1174,6 +1390,8 @@ class JobService:
                 pages=selected_pages,
                 output_dir=str(self._exports_root),
                 title=title,
+                page_size=options.pageSize,
+                margin=options.margin,
             )
         except Exception as exc:
             with self._lock:
@@ -1323,6 +1541,15 @@ class JobService:
         page.ocr_text = None
         page.ocr_blocks = []
         page.ocr_error = None
+        page.ocr_confidence = None
+
+    @staticmethod
+    def _mean_ocr_confidence(result: PageText) -> float | None:
+        if not result.blocks:
+            return None
+        return round(
+            sum(block.confidence for block in result.blocks) / len(result.blocks), 1
+        )
 
     def _assign_ocr_result(self, page: Page, result: PageText) -> None:
         page.ocr_text = result.raw_text if result.status in {"ready", "empty"} else None
@@ -1340,6 +1567,7 @@ class JobService:
         else:
             page.ocr_status = "failed"
         page.ocr_error = result.error
+        page.ocr_confidence = self._mean_ocr_confidence(result)
 
     def _ocr_fields_from_result(self, result: PageText | None) -> dict:
         if result is None:
@@ -1348,6 +1576,7 @@ class JobService:
                 "ocr_blocks": [],
                 "ocr_status": "pending",
                 "ocr_error": None,
+                "ocr_confidence": None,
             }
         return {
             "ocr_text": result.raw_text if result.status in {"ready", "empty"} else None,
@@ -1362,6 +1591,7 @@ class JobService:
             ],
             "ocr_status": result.status if result.status in {"ready", "empty", "failed"} else "failed",
             "ocr_error": result.error,
+            "ocr_confidence": self._mean_ocr_confidence(result),
         }
 
     def _start_stage(self, job_id: str, stage_key: str, message: str, progress_percent: int) -> None:
@@ -1530,8 +1760,11 @@ class JobService:
             sourceUrl=job.source_url,
             ocrLanguage=job.ocr_language,
             sensitivity=job.sensitivity,
+            cameraOutput=job.camera_output,
             trimStart=job.trim_start,
             trimEnd=job.trim_end,
+            videoWidth=job.video_width,
+            videoHeight=job.video_height,
             status=job.status,
             createdAt=job.created_at,
             updatedAt=job.updated_at,
@@ -1586,6 +1819,7 @@ class JobService:
                     ],
                     ocrStatus=page.ocr_status,
                     ocrError=page.ocr_error,
+                    ocrConfidence=page.ocr_confidence,
                 )
                 for page in pages
             ],
@@ -1633,6 +1867,7 @@ class JobService:
     ) -> PageEdits:
         return PageEdits(
             rotation=payload.rotation % 360,
+            fine_rotation=max(-15.0, min(15.0, payload.fineRotation)),
             filter=payload.filter,
             brightness=payload.brightness,
             contrast=payload.contrast,
@@ -1692,6 +1927,7 @@ class JobService:
 
         return PageEditsPayload(
             rotation=edits.rotation,
+            fineRotation=edits.fine_rotation,
             filter=edits.filter,
             brightness=edits.brightness,
             contrast=edits.contrast,
@@ -1735,6 +1971,7 @@ class JobService:
     def _serialize_page_edits(self, edits: PageEdits) -> dict[str, object]:
         return {
             "rotation": edits.rotation,
+            "fine_rotation": edits.fine_rotation,
             "filter": edits.filter,
             "brightness": edits.brightness,
             "contrast": edits.contrast,
@@ -1847,6 +2084,7 @@ class JobService:
 
         return PageEdits(
             rotation=int(payload.get("rotation", 0)) % 360,
+            fine_rotation=max(-15.0, min(15.0, float(payload.get("fine_rotation", 0.0)))),
             filter=stored_filter,  # type: ignore[arg-type]
             brightness=max(-100, min(100, int(payload.get("brightness", 0)))),
             contrast=max(-100, min(100, int(payload.get("contrast", 0)))),
@@ -1926,7 +2164,11 @@ class JobService:
 
     def _save_jobs(self) -> None:
         payload = {"jobs": [self._serialize_job(job) for job in self._jobs.values()]}
-        self._state_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        # Write-then-rename so a crash mid-write can never corrupt the only
+        # copy of the job state.
+        temp_path = self._state_path.with_name(self._state_path.name + ".tmp")
+        temp_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        os.replace(temp_path, self._state_path)
         self._publish_latest_job()
 
     def _load_jobs(self) -> None:
@@ -2002,6 +2244,7 @@ class JobService:
                     ],
                     "ocr_status": page.ocr_status,
                     "ocr_error": page.ocr_error,
+                    "ocr_confidence": page.ocr_confidence,
                 }
                 for page in job.pages
             ],
@@ -2037,9 +2280,12 @@ class JobService:
             "source_url": job.source_url,
             "ocr_language": job.ocr_language,
             "sensitivity": job.sensitivity,
+            "camera_output": job.camera_output,
             "cancel_requested": job.cancel_requested,
             "trim_start": job.trim_start,
             "trim_end": job.trim_end,
+            "video_width": job.video_width,
+            "video_height": job.video_height,
             "rejected_frames": [
                 {
                     "id": item.id,
@@ -2117,6 +2363,11 @@ class JobService:
                     ],
                     ocr_status=page.get("ocr_status", "pending"),  # type: ignore[arg-type]
                     ocr_error=page.get("ocr_error"),  # type: ignore[arg-type]
+                    ocr_confidence=(
+                        float(page["ocr_confidence"])
+                        if page.get("ocr_confidence") is not None
+                        else None
+                    ),
                 )
                 for page in payload.get("pages", [])  # type: ignore[arg-type]
             ],
@@ -2152,9 +2403,12 @@ class JobService:
             source_url=payload.get("source_url"),  # type: ignore[arg-type]
             ocr_language=sanitize_language(str(payload.get("ocr_language", "eng"))),
             sensitivity=self._sanitize_sensitivity(str(payload.get("sensitivity", "balanced"))),  # type: ignore[arg-type]
+            camera_output=self._sanitize_camera_output(str(payload.get("camera_output", "cleaned"))),  # type: ignore[arg-type]
             cancel_requested=bool(payload.get("cancel_requested", False)),
             trim_start=float(payload["trim_start"]) if payload.get("trim_start") is not None else None,
             trim_end=float(payload["trim_end"]) if payload.get("trim_end") is not None else None,
+            video_width=int(payload["video_width"]) if payload.get("video_width") is not None else None,
+            video_height=int(payload["video_height"]) if payload.get("video_height") is not None else None,
             rejected_frames=[
                 RejectedFrame(
                     id=str(item["id"]),

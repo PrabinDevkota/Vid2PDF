@@ -69,6 +69,9 @@ PageFilter = Literal["none", "enhance", "grayscale", "bw"]
 @dataclass
 class PageEdits:
     rotation: int = 0
+    # Small straightening angle in degrees (-15..15), applied after the
+    # coarse 90° rotation and before cropping.
+    fine_rotation: float = 0.0
     crop: CropBox | None = None
     filter: PageFilter = "none"
     # -100..100; 0 leaves the page untouched.
@@ -121,6 +124,8 @@ class Page:
     ocr_blocks: list[OcrBlock] = field(default_factory=list)
     ocr_status: OcrStatus = "pending"
     ocr_error: str | None = None
+    # Mean Tesseract word confidence (0-100); None when unknown or manually edited.
+    ocr_confidence: float | None = None
 
 
 @dataclass
@@ -149,6 +154,7 @@ class ExportArtifact:
 
 
 Sensitivity = Literal["fewer", "balanced", "more"]
+CameraOutput = Literal["cleaned", "color"]
 
 
 @dataclass
@@ -174,6 +180,10 @@ class Job:
     source_url: str | None = None
     ocr_language: str = "eng"
     sensitivity: Sensitivity = "balanced"
+    camera_output: CameraOutput = "cleaned"
     cancel_requested: bool = False
     trim_start: float | None = None
     trim_end: float | None = None
+    # Source video dimensions, recorded when the pipeline reads the file.
+    video_width: int | None = None
+    video_height: int | None = None

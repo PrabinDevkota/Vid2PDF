@@ -30,7 +30,9 @@ def attach_previews(
         output_image = page.selected_frame.image
         if output_image is None:
             continue
-        if context.processing_mode == "camera":
+        if context.processing_mode == "camera" and context.camera_output != "color":
+            # "color" keeps the warped/cropped capture as-is; "cleaned"
+            # binarizes it into a scan-like page.
             output_image = normalize_final_page(output_image)
         page.selected_frame.image = output_image
 

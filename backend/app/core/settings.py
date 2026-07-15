@@ -55,6 +55,9 @@ class Settings(BaseModel):
     quality_debug_max_rejected_frames: int = 12
     quality_debug_max_kept_pages: int = 12
     public_artifact_base_url: str = "/artifacts"
+    # Delete stored source videos of finished jobs after this many days.
+    # 0 disables retention (videos are kept until the job is deleted).
+    upload_retention_days: int = 0
     # Leave unset to auto-resolve from PATH and standard install locations
     # (resolve_tesseract_cmd / ensure_tectonic_available probe Program Files
     # and LOCALAPPDATA); set an absolute path here only to override.

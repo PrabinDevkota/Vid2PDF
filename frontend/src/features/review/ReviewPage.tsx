@@ -13,7 +13,18 @@ import {
   startSearchableExport,
   startTextExport,
 } from "../../lib/api";
-import type { ExportState, ProcessingJob } from "../../types";
+import type { ExportState, PageSizeOption, ProcessingJob } from "../../types";
+
+const PAGE_SIZE_KEY = "vid2pdf-page-size";
+
+function isLowResolutionImport(job: ProcessingJob): boolean {
+  if (!job.sourceUrl || !job.videoWidth || !job.videoHeight) {
+    return false;
+  }
+  // The shorter side tells the story regardless of orientation: 360p imports
+  // (from the old progressive-only downloader) are 360 on the short side.
+  return Math.min(job.videoWidth, job.videoHeight) < 480;
+}
 
 const IDLE_EXPORT: ExportState = {
   status: "idle",
@@ -43,6 +54,15 @@ export function ReviewPage() {
     null,
   );
   const [cancelling, setCancelling] = useState(false);
+  const [pageSize, setPageSize] = useState<PageSizeOption>(() => {
+    const stored = localStorage.getItem(PAGE_SIZE_KEY);
+    return stored === "a4" || stored === "letter" ? stored : "auto";
+  });
+
+  function choosePageSize(value: PageSizeOption) {
+    setPageSize(value);
+    localStorage.setItem(PAGE_SIZE_KEY, value);
+  }
 
   async function runCancel() {
     if (!activeJob) {
@@ -70,7 +90,7 @@ export function ReviewPage() {
     setPendingExport(kind);
     try {
       if (kind === "image") {
-        const exportState = await startExport(activeJob.id);
+        const exportState = await startExport(activeJob.id, pageSize);
         handleJobUpdated({ ...activeJob, export: exportState });
       } else if (kind === "text") {
         const textExport = await startTextExport(activeJob.id);
@@ -138,6 +158,17 @@ export function ReviewPage() {
         isLive={needsPolling(activeJob)}
         actions={
           <div className="review-header-actions">
+            <select
+              aria-label="PDF page size"
+              className="select-input"
+              title="Paper size for the image PDF export"
+              value={pageSize}
+              onChange={(event) => choosePageSize(event.target.value as PageSizeOption)}
+            >
+              <option value="auto">Image size</option>
+              <option value="a4">A4</option>
+              <option value="letter">Letter</option>
+            </select>
             {isCancellable ? (
               <button
                 className="secondary-button danger-button"
@@ -212,6 +243,16 @@ export function ReviewPage() {
         <div className="status-banner status-banner--error">
           <strong>Backend unavailable</strong>
           <span>{loadError}</span>
+        </div>
+      ) : null}
+
+      {isLowResolutionImport(activeJob) ? (
+        <div className="status-banner">
+          <strong>Low-resolution import ({activeJob.videoWidth}×{activeJob.videoHeight})</strong>
+          <span>
+            This video was downloaded before high-resolution URL imports were supported.
+            Re-import the same link as a new session to get sharper pages.
+          </span>
         </div>
       ) : null}
 

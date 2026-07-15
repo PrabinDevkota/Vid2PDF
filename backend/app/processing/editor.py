@@ -15,6 +15,7 @@ def apply_page_edits(source_image_path: str, edits: PageEdits) -> np.ndarray:
         raise ValueError(f"Could not read source page image: {source_image_path}")
 
     image = _rotate(source, edits.rotation)
+    image = fine_rotate_image(image, edits.fine_rotation)
     image = _crop(image, edits.crop)
     image = _apply_adjustments(image, edits.brightness, edits.contrast)
     image = _apply_filter(image, edits.filter)
@@ -51,6 +52,27 @@ def build_thumbnail(image: np.ndarray) -> np.ndarray:
 def rotate_image(image: np.ndarray, rotation: int) -> np.ndarray:
     """Rotate by a multiple of 90°, matching how page edits are applied."""
     return _rotate(image, rotation)
+
+
+def fine_rotate_image(image: np.ndarray, angle_degrees: float) -> np.ndarray:
+    """Straighten by a small angle around the center, padding with white.
+
+    The canvas size is kept, so crop/annotation coordinates stay in the same
+    space as the coarse-rotated image.
+    """
+    angle = max(-15.0, min(15.0, float(angle_degrees)))
+    if abs(angle) < 0.05:
+        return image
+    height, width = image.shape[:2]
+    matrix = cv2.getRotationMatrix2D((width / 2.0, height / 2.0), angle, 1.0)
+    return cv2.warpAffine(
+        image,
+        matrix,
+        (width, height),
+        flags=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=(255, 255, 255),
+    )
 
 
 def _rotate(image: np.ndarray, rotation: int) -> np.ndarray:

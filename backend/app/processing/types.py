@@ -114,3 +114,6 @@ class PipelineContext:
     debug_report_path: str
     artifact_base_url: str
     processing_mode: ProcessingMode
+    # Camera mode only: "cleaned" binarizes pages into scan-like output,
+    # "color" keeps the original (warped/cropped) color capture.
+    camera_output: str = "cleaned"

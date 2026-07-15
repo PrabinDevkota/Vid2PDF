@@ -5,13 +5,17 @@ import {
   Highlighter,
   Loader2,
   Pencil,
+  Redo2,
   RotateCcw,
   RotateCw,
   Type,
+  Undo2,
   Wand2,
   X,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
-import { fetchCropSuggestion, resolveArtifactUrl } from "../../lib/api";
+import { fetchCropSuggestion, fetchSkewSuggestion, resolveArtifactUrl } from "../../lib/api";
 import type {
   BlurRegion,
   CropBox,
@@ -42,6 +46,8 @@ interface DragState {
 
 const MAX_CANVAS_WIDTH = 920;
 const MAX_CANVAS_HEIGHT = 640;
+const ZOOM_STEPS = [1, 1.5, 2, 3];
+const MAX_HISTORY = 50;
 
 const TOOL_CONFIG: { key: EditorTool; label: string; hint: string; Icon: typeof Crop }[] = [
   { key: "crop", label: "Crop", hint: "Drag to select the area to keep.", Icon: Crop },
@@ -99,6 +105,11 @@ export function PageEditorModal({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isAutoCropping, setIsAutoCropping] = useState(false);
   const [autoCropNote, setAutoCropNote] = useState<string | null>(null);
+  const [isAutoStraightening, setIsAutoStraightening] = useState(false);
+  const [straightenNote, setStraightenNote] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [undoStack, setUndoStack] = useState<PageEdits[]>([]);
+  const [redoStack, setRedoStack] = useState<PageEdits[]>([]);
 
   useEffect(() => {
     if (!page) {
@@ -113,6 +124,11 @@ export function PageEditorModal({
     setLoadError(null);
     setIsAutoCropping(false);
     setAutoCropNote(null);
+    setIsAutoStraightening(false);
+    setStraightenNote(null);
+    setZoom(1);
+    setUndoStack([]);
+    setRedoStack([]);
 
     const sourceUrl = resolveArtifactUrl(page.sourceImageUrl ?? page.imageUrl);
     if (!sourceUrl) {
@@ -141,6 +157,61 @@ export function PageEditorModal({
     }
   }, [isSaving, onClose]);
 
+  /** Push the current edits onto the undo stack (called before a change). */
+  const snapshotHistory = useCallback(() => {
+    setEdits((current) => {
+      if (current) {
+        setUndoStack((stack) => [...stack.slice(-(MAX_HISTORY - 1)), structuredClone(current)]);
+        setRedoStack([]);
+      }
+      return current;
+    });
+  }, []);
+
+  /** History-aware replacement for setEdits; use for every discrete change. */
+  const updateEdits = useCallback(
+    (next: PageEdits) => {
+      snapshotHistory();
+      setEdits(next);
+    },
+    [snapshotHistory],
+  );
+
+  const undo = useCallback(() => {
+    setUndoStack((stack) => {
+      if (stack.length === 0) {
+        return stack;
+      }
+      const previous = stack[stack.length - 1];
+      setEdits((current) => {
+        if (current) {
+          setRedoStack((redo) => [...redo.slice(-(MAX_HISTORY - 1)), structuredClone(current)]);
+        }
+        return previous;
+      });
+      return stack.slice(0, -1);
+    });
+  }, []);
+
+  const redo = useCallback(() => {
+    setRedoStack((stack) => {
+      if (stack.length === 0) {
+        return stack;
+      }
+      const next = stack[stack.length - 1];
+      setEdits((current) => {
+        if (current) {
+          setUndoStack((undoItems) => [
+            ...undoItems.slice(-(MAX_HISTORY - 1)),
+            structuredClone(current),
+          ]);
+        }
+        return next;
+      });
+      return stack.slice(0, -1);
+    });
+  }, []);
+
   useEffect(() => {
     if (!page) {
       return;
@@ -148,34 +219,53 @@ export function PageEditorModal({
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         handleClose();
+        return;
+      }
+      const isEditableTarget =
+        event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
+      if ((event.ctrlKey || event.metaKey) && !isEditableTarget) {
+        const key = event.key.toLowerCase();
+        if (key === "z" && !event.shiftKey) {
+          event.preventDefault();
+          undo();
+        } else if (key === "y" || (key === "z" && event.shiftKey)) {
+          event.preventDefault();
+          redo();
+        }
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [page, handleClose]);
+  }, [page, handleClose, undo, redo]);
 
   const workingSize = useMemo(() => {
     const image = imageRef.current;
     if (!image || !edits) {
-      return { width: 1, height: 1, scale: 1 };
+      return { width: 1, height: 1, displayWidth: 1, scale: 1 };
     }
     const rotatedWidth = edits.rotation % 180 === 0 ? image.naturalWidth : image.naturalHeight;
     const rotatedHeight = edits.rotation % 180 === 0 ? image.naturalHeight : image.naturalWidth;
     const croppedWidth = edits.crop?.width ?? rotatedWidth;
     const croppedHeight = edits.crop?.height ?? rotatedHeight;
-    const scale = Math.min(
+    const fitScale = Math.min(
       1,
       MAX_CANVAS_WIDTH / Math.max(croppedWidth, 1),
       MAX_CANVAS_HEIGHT / Math.max(croppedHeight, 1),
     );
+    // The canvas backing sharpens toward native resolution (capped at 1:1);
+    // past that, zoom continues via CSS magnification so small pages still
+    // enlarge. The scroll container provides panning when zoomed.
+    const displayScale = fitScale * zoom;
+    const scale = Math.min(displayScale, 1);
     return {
       width: Math.max(1, Math.round(croppedWidth * scale)),
       height: Math.max(1, Math.round(croppedHeight * scale)),
+      displayWidth: Math.max(1, Math.round(croppedWidth * displayScale)),
       scale,
     };
     // imageReady matters: the memo reads imageRef.current, which is only
     // populated once the source image finishes loading.
-  }, [edits, imageReady]);
+  }, [edits, imageReady, zoom]);
 
   useEffect(() => {
     if (!page || !edits || !imageReady || !canvasRef.current || !imageRef.current) {
@@ -184,6 +274,7 @@ export function PageEditorModal({
     const baseKey = [
       page.id,
       edits.rotation,
+      edits.fineRotation,
       JSON.stringify(edits.crop),
       edits.filter,
       edits.brightness,
@@ -217,10 +308,11 @@ export function PageEditorModal({
 
   function transformEdits(nextRotation: number, nextCrop: CropBox | null): PageEdits {
     // Rotation/crop change the coordinate space annotations were placed in,
-    // so they cannot be carried over. Coordinate-free settings (filter and
-    // brightness/contrast adjustments) are kept.
+    // so they cannot be carried over. Coordinate-free settings (filter,
+    // adjustments, and the straightening angle) are kept.
     return {
       rotation: nextRotation,
+      fineRotation: edits?.fineRotation ?? 0,
       crop: nextCrop,
       filter: edits?.filter ?? "none",
       brightness: edits?.brightness ?? 0,
@@ -285,14 +377,7 @@ export function PageEditorModal({
         color: textColor,
         fontSize: textSize,
       };
-      setEdits((current) =>
-        current
-          ? {
-              ...current,
-              texts: [...current.texts, nextText],
-            }
-          : current,
-      );
+      updateEdits({ ...edits, texts: [...edits.texts, nextText] });
     }
   }
 
@@ -326,7 +411,7 @@ export function PageEditorModal({
     }
     if ((tool === "draw" || tool === "highlight") && activeStroke) {
       if (activeStroke.points.length > 1) {
-        setEdits({
+        updateEdits({
           ...edits,
           strokes: [...edits.strokes, activeStroke],
         });
@@ -342,7 +427,7 @@ export function PageEditorModal({
           // view; offset by the existing crop so crops compose correctly.
           const offsetX = edits.crop?.x ?? 0;
           const offsetY = edits.crop?.y ?? 0;
-          setEdits(
+          updateEdits(
             transformEdits(edits.rotation, {
               ...region,
               x: region.x + offsetX,
@@ -356,7 +441,7 @@ export function PageEditorModal({
             mode: regionMode,
             fillColor,
           };
-          setEdits({
+          updateEdits({
             ...edits,
             blurRegions: [...edits.blurRegions, nextRegion],
           });
@@ -378,6 +463,29 @@ export function PageEditorModal({
     await onSave(edits);
   }
 
+  async function handleAutoStraighten() {
+    if (!page || !edits) {
+      return;
+    }
+    setIsAutoStraightening(true);
+    setStraightenNote(null);
+    try {
+      const suggestion = await fetchSkewSuggestion(page.jobId, page.id, edits.rotation);
+      if (suggestion.angle !== null && Math.abs(suggestion.angle) >= 0.1) {
+        updateEdits({ ...edits, fineRotation: suggestion.angle });
+        setStraightenNote(`Straightened by ${suggestion.angle.toFixed(1)}°.`);
+      } else {
+        setStraightenNote("No tilt detected — the page already looks level.");
+      }
+    } catch (error) {
+      setStraightenNote(
+        error instanceof Error ? error.message : "Auto-straighten failed.",
+      );
+    } finally {
+      setIsAutoStraightening(false);
+    }
+  }
+
   async function handleAutoCrop() {
     if (!page || !edits) {
       return;
@@ -385,9 +493,14 @@ export function PageEditorModal({
     setIsAutoCropping(true);
     setAutoCropNote(null);
     try {
-      const suggestion = await fetchCropSuggestion(page.jobId, page.id, edits.rotation);
+      const suggestion = await fetchCropSuggestion(
+        page.jobId,
+        page.id,
+        edits.rotation,
+        edits.fineRotation,
+      );
       if (suggestion.crop) {
-        setEdits(transformEdits(edits.rotation, suggestion.crop));
+        updateEdits(transformEdits(edits.rotation, suggestion.crop));
         setAutoCropNote("Cropped to the detected document area. Save to apply.");
       } else {
         setAutoCropNote("No document region detected — drag to crop manually.");
@@ -444,7 +557,7 @@ export function PageEditorModal({
               <div className="editor-toolbar">
                 <button
                   className="secondary-button"
-                  onClick={() => setEdits(transformEdits((edits.rotation + 270) % 360, null))}
+                  onClick={() => updateEdits(transformEdits((edits.rotation + 270) % 360, null))}
                   type="button"
                 >
                   <RotateCcw size={14} aria-hidden="true" />
@@ -452,13 +565,57 @@ export function PageEditorModal({
                 </button>
                 <button
                   className="secondary-button"
-                  onClick={() => setEdits(transformEdits((edits.rotation + 90) % 360, null))}
+                  onClick={() => updateEdits(transformEdits((edits.rotation + 90) % 360, null))}
                   type="button"
                 >
                   <RotateCw size={14} aria-hidden="true" />
                   Right
                 </button>
               </div>
+              <label>
+                <span>Straighten ({edits.fineRotation.toFixed(1)}°)</span>
+                <input
+                  type="range"
+                  min={-15}
+                  max={15}
+                  step={0.1}
+                  value={edits.fineRotation}
+                  onPointerDown={snapshotHistory}
+                  onKeyDown={(event) => {
+                    if (!event.repeat) {
+                      snapshotHistory();
+                    }
+                  }}
+                  onChange={(event) =>
+                    setEdits({ ...edits, fineRotation: Number(event.target.value) })
+                  }
+                />
+              </label>
+              <div className="editor-toolbar">
+                <button
+                  className="secondary-button"
+                  disabled={isAutoStraightening || !imageReady}
+                  onClick={() => void handleAutoStraighten()}
+                  type="button"
+                >
+                  {isAutoStraightening ? (
+                    <Loader2 size={14} className="spin" aria-hidden="true" />
+                  ) : (
+                    <Wand2 size={14} aria-hidden="true" />
+                  )}
+                  Auto straighten
+                </button>
+                {edits.fineRotation !== 0 ? (
+                  <button
+                    className="secondary-button"
+                    onClick={() => updateEdits({ ...edits, fineRotation: 0 })}
+                    type="button"
+                  >
+                    Reset
+                  </button>
+                ) : null}
+              </div>
+              {straightenNote ? <p className="editor-note">{straightenNote}</p> : null}
               {hasAnnotations ? (
                 <p className="editor-note">
                   Rotating or re-cropping clears drawings, text, and blurs.
@@ -480,7 +637,7 @@ export function PageEditorModal({
                   <button
                     key={value}
                     className={`secondary-button editor-tool-btn ${edits.filter === value ? "is-active" : ""}`}
-                    onClick={() => setEdits({ ...edits, filter: value })}
+                    onClick={() => updateEdits({ ...edits, filter: value })}
                     type="button"
                   >
                     {label}
@@ -503,6 +660,12 @@ export function PageEditorModal({
                   min={-100}
                   max={100}
                   value={edits.brightness}
+                  onPointerDown={snapshotHistory}
+                  onKeyDown={(event) => {
+                    if (!event.repeat) {
+                      snapshotHistory();
+                    }
+                  }}
                   onChange={(event) =>
                     setEdits({ ...edits, brightness: Number(event.target.value) })
                   }
@@ -515,6 +678,12 @@ export function PageEditorModal({
                   min={-100}
                   max={100}
                   value={edits.contrast}
+                  onPointerDown={snapshotHistory}
+                  onKeyDown={(event) => {
+                    if (!event.repeat) {
+                      snapshotHistory();
+                    }
+                  }}
                   onChange={(event) =>
                     setEdits({ ...edits, contrast: Number(event.target.value) })
                   }
@@ -523,7 +692,7 @@ export function PageEditorModal({
               {edits.brightness !== 0 || edits.contrast !== 0 ? (
                 <button
                   className="secondary-button"
-                  onClick={() => setEdits({ ...edits, brightness: 0, contrast: 0 })}
+                  onClick={() => updateEdits({ ...edits, brightness: 0, contrast: 0 })}
                   type="button"
                 >
                   Reset adjustments
@@ -550,7 +719,7 @@ export function PageEditorModal({
                 {edits.crop ? (
                   <button
                     className="secondary-button"
-                    onClick={() => setEdits(transformEdits(edits.rotation, null))}
+                    onClick={() => updateEdits(transformEdits(edits.rotation, null))}
                     type="button"
                   >
                     Clear crop
@@ -699,35 +868,30 @@ export function PageEditorModal({
             <div className="editor-toolbar">
               <button
                 className="secondary-button"
-                disabled={edits.strokes.length === 0}
-                onClick={() => setEdits({ ...edits, strokes: edits.strokes.slice(0, -1) })}
+                disabled={undoStack.length === 0}
+                onClick={undo}
+                title="Undo (Ctrl+Z)"
                 type="button"
               >
-                Undo draw
+                <Undo2 size={14} aria-hidden="true" />
+                Undo
               </button>
               <button
                 className="secondary-button"
-                disabled={edits.texts.length === 0}
-                onClick={() => setEdits({ ...edits, texts: edits.texts.slice(0, -1) })}
+                disabled={redoStack.length === 0}
+                onClick={redo}
+                title="Redo (Ctrl+Y)"
                 type="button"
               >
-                Undo text
-              </button>
-              <button
-                className="secondary-button"
-                disabled={edits.blurRegions.length === 0}
-                onClick={() =>
-                  setEdits({ ...edits, blurRegions: edits.blurRegions.slice(0, -1) })
-                }
-                type="button"
-              >
-                Undo blur
+                <Redo2 size={14} aria-hidden="true" />
+                Redo
               </button>
               <button
                 className="secondary-button danger-button"
                 onClick={() =>
-                  setEdits({
+                  updateEdits({
                     rotation: 0,
+                    fineRotation: 0,
                     crop: null,
                     filter: "none",
                     brightness: 0,
@@ -757,17 +921,62 @@ export function PageEditorModal({
                 <span>Loading page image…</span>
               </div>
             ) : null}
-            <canvas
-              className="editor-canvas"
-              style={{ cursor: TOOL_CURSOR[tool] }}
-              height={workingSize.height}
-              ref={canvasRef}
-              width={workingSize.width}
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              onPointerCancel={handlePointerCancel}
-            />
+            <div className="editor-zoom-bar">
+              <button
+                className="icon-button"
+                disabled={zoom <= ZOOM_STEPS[0]}
+                onClick={() =>
+                  setZoom((current) => {
+                    const index = ZOOM_STEPS.indexOf(current);
+                    return ZOOM_STEPS[Math.max(index - 1, 0)];
+                  })
+                }
+                title="Zoom out"
+                type="button"
+              >
+                <ZoomOut size={14} aria-hidden="true" />
+              </button>
+              <span className="editor-zoom-bar__value">{Math.round(zoom * 100)}%</span>
+              <button
+                className="icon-button"
+                disabled={zoom >= ZOOM_STEPS[ZOOM_STEPS.length - 1]}
+                onClick={() =>
+                  setZoom((current) => {
+                    const index = ZOOM_STEPS.indexOf(current);
+                    return ZOOM_STEPS[Math.min(index + 1, ZOOM_STEPS.length - 1)];
+                  })
+                }
+                title="Zoom in"
+                type="button"
+              >
+                <ZoomIn size={14} aria-hidden="true" />
+              </button>
+              {zoom !== 1 ? (
+                <button
+                  className="secondary-button"
+                  onClick={() => setZoom(1)}
+                  type="button"
+                >
+                  Fit
+                </button>
+              ) : null}
+            </div>
+            <div className={`editor-canvas-scroll ${zoom > 1 ? "editor-canvas-scroll--zoomed" : ""}`}>
+              <canvas
+                className={`editor-canvas ${zoom > 1 ? "editor-canvas--zoomed" : ""}`}
+                style={{
+                  cursor: TOOL_CURSOR[tool],
+                  width: zoom > 1 ? `${workingSize.displayWidth}px` : undefined,
+                }}
+                height={workingSize.height}
+                ref={canvasRef}
+                width={workingSize.width}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerCancel}
+              />
+            </div>
           </div>
         </div>
 
@@ -889,6 +1098,28 @@ function buildBaseCanvas(image: HTMLImageElement, edits: PageEdits) {
   }
   rotatedCtx.drawImage(image, 0, 0);
   rotatedCtx.restore();
+
+  if (Math.abs(edits.fineRotation) >= 0.05) {
+    // Straighten in place, keeping the canvas size (matches the backend's
+    // fine_rotate_image). Canvas y grows downward, so the backend's positive
+    // counter-clockwise angle maps to a negative canvas rotation.
+    const straightened = document.createElement("canvas");
+    straightened.width = rotatedWidth;
+    straightened.height = rotatedHeight;
+    const straightenedCtx = straightened.getContext("2d");
+    if (straightenedCtx) {
+      straightenedCtx.fillStyle = "#ffffff";
+      straightenedCtx.fillRect(0, 0, rotatedWidth, rotatedHeight);
+      straightenedCtx.translate(rotatedWidth / 2, rotatedHeight / 2);
+      straightenedCtx.rotate((-edits.fineRotation * Math.PI) / 180);
+      straightenedCtx.drawImage(rotatedCanvas, -rotatedWidth / 2, -rotatedHeight / 2);
+      const rotatedTargetCtx = rotatedCanvas.getContext("2d");
+      if (rotatedTargetCtx) {
+        rotatedTargetCtx.clearRect(0, 0, rotatedWidth, rotatedHeight);
+        rotatedTargetCtx.drawImage(straightened, 0, 0);
+      }
+    }
+  }
 
   const crop = edits.crop ?? { x: 0, y: 0, width: rotatedWidth, height: rotatedHeight };
   const croppedCanvas = document.createElement("canvas");
