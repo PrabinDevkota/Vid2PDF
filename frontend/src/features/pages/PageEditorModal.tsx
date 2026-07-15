@@ -77,6 +77,10 @@ export function PageEditorModal({
 }: PageEditorModalProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
+  // The base render (rotate/crop/filter/adjust/blur) is expensive — it walks
+  // every pixel — so it is cached and only annotations are redrawn while the
+  // pointer moves.
+  const baseCacheRef = useRef<{ key: string; canvas: HTMLCanvasElement } | null>(null);
   const [edits, setEdits] = useState<PageEdits | null>(null);
   const [tool, setTool] = useState<EditorTool>("crop");
   const [drawColor, setDrawColor] = useState("#d9480f");
@@ -177,9 +181,24 @@ export function PageEditorModal({
     if (!page || !edits || !imageReady || !canvasRef.current || !imageRef.current) {
       return;
     }
+    const baseKey = [
+      page.id,
+      edits.rotation,
+      JSON.stringify(edits.crop),
+      edits.filter,
+      edits.brightness,
+      edits.contrast,
+      JSON.stringify(edits.blurRegions),
+    ].join("|");
+    let base =
+      baseCacheRef.current?.key === baseKey ? baseCacheRef.current.canvas : null;
+    if (!base) {
+      base = buildBaseCanvas(imageRef.current, edits);
+      baseCacheRef.current = { key: baseKey, canvas: base };
+    }
     renderEditorCanvas({
       canvas: canvasRef.current,
-      image: imageRef.current,
+      base,
       edits,
       scale: workingSize.scale,
       dragState,
@@ -787,7 +806,7 @@ function normalizeRegion(start: EditPoint, end: EditPoint): CropBox {
 
 function renderEditorCanvas({
   canvas,
-  image,
+  base,
   edits,
   scale,
   dragState,
@@ -795,7 +814,7 @@ function renderEditorCanvas({
   tool,
 }: {
   canvas: HTMLCanvasElement;
-  image: HTMLImageElement;
+  base: HTMLCanvasElement;
   edits: PageEdits;
   scale: number;
   dragState: DragState | null;
@@ -807,20 +826,44 @@ function renderEditorCanvas({
     return;
   }
 
-  const previewCanvas = buildPreviewCanvas(image, edits, dragState, activeStroke, tool);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = "#f3f4f6";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(previewCanvas, 0, 0, previewCanvas.width * scale, previewCanvas.height * scale);
+  ctx.drawImage(base, 0, 0, base.width * scale, base.height * scale);
+
+  // Annotations are cheap; draw them scaled on top of the cached base.
+  ctx.save();
+  ctx.scale(scale, scale);
+  for (const stroke of edits.strokes) {
+    drawStroke(ctx, stroke);
+  }
+  if (activeStroke) {
+    drawStroke(ctx, activeStroke);
+  }
+  for (const text of edits.texts) {
+    ctx.fillStyle = text.color;
+    ctx.font = `${text.fontSize}px "Segoe UI", sans-serif`;
+    ctx.fillText(text.text, text.x, text.y);
+  }
+  if (dragState && (tool === "crop" || tool === "blur")) {
+    const region = normalizeRegion(dragState.start, dragState.current);
+    if (tool === "crop") {
+      // Dim everything outside the pending crop selection.
+      ctx.fillStyle = "rgba(15, 23, 42, 0.4)";
+      ctx.fillRect(0, 0, base.width, region.y);
+      ctx.fillRect(0, region.y, region.x, region.height);
+      ctx.fillRect(region.x + region.width, region.y, base.width, region.height);
+      ctx.fillRect(0, region.y + region.height, base.width, base.height);
+    }
+    ctx.strokeStyle = tool === "crop" ? "#0f766e" : "#dc2626";
+    ctx.lineWidth = 2 / Math.max(scale, 0.01);
+    ctx.setLineDash([10, 6]);
+    ctx.strokeRect(region.x, region.y, region.width, region.height);
+  }
+  ctx.restore();
 }
 
-function buildPreviewCanvas(
-  image: HTMLImageElement,
-  edits: PageEdits,
-  dragState: DragState | null,
-  activeStroke: DrawStroke | null,
-  tool: EditorTool,
-) {
+function buildBaseCanvas(image: HTMLImageElement, edits: PageEdits) {
   const rotatedCanvas = document.createElement("canvas");
   const rotatedCtx = rotatedCanvas.getContext("2d");
   if (!rotatedCtx) {
@@ -905,37 +948,6 @@ function buildPreviewCanvas(
     croppedCtx.save();
     croppedCtx.filter = `blur(${Math.max(2, region.intensity / 3)}px)`;
     croppedCtx.drawImage(tempCanvas, region.x, region.y);
-    croppedCtx.restore();
-  }
-
-  for (const stroke of edits.strokes) {
-    drawStroke(croppedCtx, stroke);
-  }
-  if (activeStroke) {
-    drawStroke(croppedCtx, activeStroke);
-  }
-
-  for (const text of edits.texts) {
-    croppedCtx.fillStyle = text.color;
-    croppedCtx.font = `${text.fontSize}px "Segoe UI", sans-serif`;
-    croppedCtx.fillText(text.text, text.x, text.y);
-  }
-
-  if (dragState && (tool === "crop" || tool === "blur")) {
-    const region = normalizeRegion(dragState.start, dragState.current);
-    croppedCtx.save();
-    if (tool === "crop") {
-      // Dim everything outside the pending crop selection.
-      croppedCtx.fillStyle = "rgba(15, 23, 42, 0.4)";
-      croppedCtx.fillRect(0, 0, croppedCanvas.width, region.y);
-      croppedCtx.fillRect(0, region.y, region.x, region.height);
-      croppedCtx.fillRect(region.x + region.width, region.y, croppedCanvas.width, region.height);
-      croppedCtx.fillRect(0, region.y + region.height, croppedCanvas.width, croppedCanvas.height);
-    }
-    croppedCtx.strokeStyle = tool === "crop" ? "#0f766e" : "#dc2626";
-    croppedCtx.lineWidth = 2;
-    croppedCtx.setLineDash([10, 6]);
-    croppedCtx.strokeRect(region.x, region.y, region.width, region.height);
     croppedCtx.restore();
   }
 

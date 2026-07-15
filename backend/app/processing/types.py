@@ -70,6 +70,10 @@ class SampledFrame:
     quality: FrameQuality
     detection: DocumentDetection | None = None
     change_ratio: float = 1.0
+    # Downsampled grayscale (320x180) computed once at sampling time and
+    # reused by every frame-to-frame comparison, so full-resolution frames
+    # are not repeatedly gray-converted and resized.
+    gray_small: np.ndarray | None = None
 
 
 @dataclass

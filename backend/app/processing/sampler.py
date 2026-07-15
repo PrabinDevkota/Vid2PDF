@@ -65,66 +65,73 @@ def sample_frames(
     if start_frame > 0:
         capture.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
     previous_detection = None
-    previous_processed_frame = None
+    previous_gray_small = None
 
-    while True:
+    while frame_index <= end_frame:
+        if (frame_index - start_frame) % frame_interval != 0:
+            # grab() advances the decoder without the retrieve/color-convert
+            # step, which is the expensive half of read() for skipped frames.
+            if not capture.grab():
+                break
+            frame_index += 1
+            continue
+
         success, frame = capture.read()
-        if not success or frame_index > end_frame:
+        if not success:
             break
 
-        if (frame_index - start_frame) % frame_interval == 0:
-            if should_abort is not None and should_abort():
-                capture.release()
-                raise JobCancelledError("Frame sampling aborted by cancellation request.")
-            if context.processing_mode == "camera":
-                detection = detect_document_region(frame)
-                processed_frame = detection.corrected_image
-                if not detection.found:
-                    # Phone/WhatsApp screen recordings often have no paper contour.
-                    # Keep a mild penalty instead of stacking uncapped detection failures.
-                    transition_penalty = 0.2
-                else:
-                    transition_penalty = (
-                        max(0.0, 0.42 - detection.page_coverage)
-                        + max(0.0, 0.58 - detection.single_page_score)
-                        + max(0.0, detection.background_intrusion_ratio - 0.08) * 1.2
-                        + max(0.0, detection.border_touch_ratio - 0.05) * 0.8
-                        + (detection.occlusion_ratio * 1.1)
-                    )
-                    if previous_detection is not None:
-                        transition_penalty += _camera_stability_penalty(
-                            previous_detection,
-                            detection,
-                        )
-                transition_penalty = min(transition_penalty, 1.0)
+        if should_abort is not None and should_abort():
+            capture.release()
+            raise JobCancelledError("Frame sampling aborted by cancellation request.")
+        if context.processing_mode == "camera":
+            detection = detect_document_region(frame)
+            processed_frame = detection.corrected_image
+            if not detection.found:
+                # Phone/WhatsApp screen recordings often have no paper contour.
+                # Keep a mild penalty instead of stacking uncapped detection failures.
+                transition_penalty = 0.2
             else:
-                detection = None
-                processed_frame = frame
-                transition_penalty = 0.0
-            if previous_processed_frame is not None:
-                transition_penalty += _frame_transition_penalty(
-                    previous_processed_frame,
-                    processed_frame,
+                transition_penalty = (
+                    max(0.0, 0.42 - detection.page_coverage)
+                    + max(0.0, 0.58 - detection.single_page_score)
+                    + max(0.0, detection.background_intrusion_ratio - 0.08) * 1.2
+                    + max(0.0, detection.border_touch_ratio - 0.05) * 0.8
+                    + (detection.occlusion_ratio * 1.1)
                 )
-                transition_penalty = min(transition_penalty, 1.0)
+                if previous_detection is not None:
+                    transition_penalty += _camera_stability_penalty(
+                        previous_detection,
+                        detection,
+                    )
+            transition_penalty = min(transition_penalty, 1.0)
+        else:
+            detection = None
+            processed_frame = frame
+            transition_penalty = 0.0
 
-            quality = compute_frame_quality(
-                processed_frame,
-                mode=context.processing_mode,
+        gray_small = downscale_gray(processed_frame)
+        if previous_gray_small is not None:
+            transition_penalty += _frame_transition_penalty(previous_gray_small, gray_small)
+            transition_penalty = min(transition_penalty, 1.0)
+
+        quality = compute_frame_quality(
+            processed_frame,
+            mode=context.processing_mode,
+            detection=detection,
+            transition_penalty=transition_penalty,
+        )
+        sampled_frames.append(
+            SampledFrame(
+                timestamp=frame_index / metadata.fps,
+                frame_index=frame_index,
+                image=processed_frame,
+                quality=quality,
                 detection=detection,
-                transition_penalty=transition_penalty,
+                gray_small=gray_small,
             )
-            sampled_frames.append(
-                SampledFrame(
-                    timestamp=frame_index / metadata.fps,
-                    frame_index=frame_index,
-                    image=processed_frame,
-                    quality=quality,
-                    detection=detection,
-                )
-            )
-            previous_detection = detection
-            previous_processed_frame = processed_frame
+        )
+        previous_detection = detection
+        previous_gray_small = gray_small
         frame_index += 1
 
     capture.release()
@@ -163,11 +170,26 @@ def _camera_stability_penalty(previous_detection, current_detection) -> float:
     )
 
 
-def _frame_transition_penalty(previous_frame: np.ndarray, current_frame: np.ndarray) -> float:
-    prev_gray = cv2.cvtColor(previous_frame, cv2.COLOR_BGR2GRAY)
-    curr_gray = cv2.cvtColor(current_frame, cv2.COLOR_BGR2GRAY)
-    prev_small = cv2.resize(prev_gray, (224, 224), interpolation=cv2.INTER_AREA)
-    curr_small = cv2.resize(curr_gray, (224, 224), interpolation=cv2.INTER_AREA)
+GRAY_SMALL_SIZE = (320, 180)
+
+
+def downscale_gray(frame: np.ndarray) -> np.ndarray:
+    """Shared 320x180 grayscale used for all frame-to-frame comparisons."""
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    return cv2.resize(gray, GRAY_SMALL_SIZE, interpolation=cv2.INTER_AREA)
+
+
+def frame_gray_small(frame: SampledFrame) -> np.ndarray:
+    """Return the cached downsampled gray, computing it for frames built
+    outside the sampler (manual/restored pages)."""
+    if frame.gray_small is None:
+        frame.gray_small = downscale_gray(frame.image)
+    return frame.gray_small
+
+
+def _frame_transition_penalty(prev_small: np.ndarray, curr_small: np.ndarray) -> float:
+    if prev_small.shape != curr_small.shape:
+        prev_small = cv2.resize(prev_small, (curr_small.shape[1], curr_small.shape[0]))
     diff = cv2.absdiff(prev_small, curr_small)
     mean_diff = float(np.mean(diff) / 255.0)
     _, threshold = cv2.threshold(diff, 22, 255, cv2.THRESH_BINARY)

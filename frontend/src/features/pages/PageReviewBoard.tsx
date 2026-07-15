@@ -48,6 +48,20 @@ function withCacheKey(url: string | null, cacheKey: string): string | null {
   return `${url}${url.includes("?") ? "&" : "?"}v=${encodeURIComponent(cacheKey)}`;
 }
 
+/**
+ * Cache key derived from the page's edits: rendered artifacts only change
+ * when edits change, so keying on them (instead of job.updatedAt) stops every
+ * SSE progress event from refetching every thumbnail.
+ */
+function pageCacheKey(page: ExtractedPage): string {
+  const serialized = JSON.stringify(page.edits);
+  let hash = 5381;
+  for (let i = 0; i < serialized.length; i += 1) {
+    hash = ((hash << 5) + hash + serialized.charCodeAt(i)) | 0;
+  }
+  return hash.toString(36);
+}
+
 interface PageReviewBoardProps {
   job: ProcessingJob | null;
   onJobUpdated: (job: ProcessingJob) => void;
@@ -511,7 +525,7 @@ export function PageReviewBoard({ job, onJobUpdated }: PageReviewBoardProps) {
                 {visiblePages.map((page, index) => {
                   const thumbnailUrl = withCacheKey(
                     resolveArtifactUrl(page.thumbnailUrl),
-                    job.updatedAt,
+                    pageCacheKey(page),
                   );
 
                   return (

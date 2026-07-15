@@ -44,8 +44,7 @@ def download_video(
         format_spec = "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"
     else:
         format_spec = (
-            "bestvideo[vcodec^=avc1][height<=1080]"
-            "/bestvideo[height<=1080][ext=mp4]/bestvideo[height<=1080]"
+            "bestvideo[height<=1080][ext=mp4]/bestvideo[height<=1080]"
             "/best[height<=1080][ext=mp4]/best"
         )
 

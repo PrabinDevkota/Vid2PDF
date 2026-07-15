@@ -34,8 +34,14 @@ def attach_previews(
             output_image = normalize_final_page(output_image)
         page.selected_frame.image = output_image
 
-        cv2.imwrite(str(source_image_path), output_image)
-        cv2.imwrite(str(image_path), output_image)
+        # The source page and the initial rendered page are identical bytes;
+        # PNG-encode once and write the buffer twice instead of encoding twice.
+        encoded_ok, png_buffer = cv2.imencode(".png", output_image)
+        if not encoded_ok:
+            continue
+        png_bytes = png_buffer.tobytes()
+        source_image_path.write_bytes(png_bytes)
+        image_path.write_bytes(png_bytes)
         thumbnail_image = build_thumbnail(output_image)
         cv2.imwrite(str(thumbnail_path), thumbnail_image, [int(cv2.IMWRITE_JPEG_QUALITY), 88])
 

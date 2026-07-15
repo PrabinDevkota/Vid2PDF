@@ -5,6 +5,7 @@ import logging
 import cv2
 import numpy as np
 
+from app.processing.sampler import frame_gray_small
 from app.processing.types import SampledFrame, StableSegment
 
 logger = logging.getLogger(__name__)
@@ -29,8 +30,10 @@ def detect_stable_segments(
         if index == 0:
             frame.change_ratio = 0.0
             continue
-        frame.change_ratio = _frame_change_ratio(frames[index - 1].image, frame.image)
-        mean_diff = _mean_frame_difference(frames[index - 1].image, frame.image)
+        previous_small = frame_gray_small(frames[index - 1])
+        current_small = frame_gray_small(frame)
+        frame.change_ratio = _frame_change_ratio(previous_small, current_small)
+        mean_diff = _mean_frame_difference(previous_small, current_small)
         hash_distance = _hash_distance(
             frames[index - 1].quality.perceptual_hash,
             frame.quality.perceptual_hash,
@@ -172,11 +175,7 @@ def _build_segment(
     )
 
 
-def _frame_change_ratio(previous_frame: np.ndarray, current_frame: np.ndarray) -> float:
-    prev_gray = cv2.cvtColor(previous_frame, cv2.COLOR_BGR2GRAY)
-    curr_gray = cv2.cvtColor(current_frame, cv2.COLOR_BGR2GRAY)
-    prev_small = cv2.resize(prev_gray, (320, 180), interpolation=cv2.INTER_AREA)
-    curr_small = cv2.resize(curr_gray, (320, 180), interpolation=cv2.INTER_AREA)
+def _frame_change_ratio(prev_small: np.ndarray, curr_small: np.ndarray) -> float:
     diff = cv2.absdiff(prev_small, curr_small)
     _, threshold = cv2.threshold(diff, 18, 255, cv2.THRESH_BINARY)
     return float(np.mean(threshold > 0))
@@ -186,11 +185,7 @@ def _hash_distance(left_hash: str, right_hash: str) -> int:
     return (int(left_hash, 16) ^ int(right_hash, 16)).bit_count()
 
 
-def _mean_frame_difference(previous_frame: np.ndarray, current_frame: np.ndarray) -> float:
-    prev_gray = cv2.cvtColor(previous_frame, cv2.COLOR_BGR2GRAY)
-    curr_gray = cv2.cvtColor(current_frame, cv2.COLOR_BGR2GRAY)
-    prev_small = cv2.resize(prev_gray, (256, 144), interpolation=cv2.INTER_AREA)
-    curr_small = cv2.resize(curr_gray, (256, 144), interpolation=cv2.INTER_AREA)
+def _mean_frame_difference(prev_small: np.ndarray, curr_small: np.ndarray) -> float:
     diff = cv2.absdiff(prev_small, curr_small)
     return float(np.mean(diff) / 255.0)
 
