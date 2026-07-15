@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Crop,
   EyeOff,
+  Highlighter,
   Loader2,
   Pencil,
   RotateCcw,
@@ -19,10 +20,13 @@ import type {
   ExtractedPage,
   PageEdits,
   PageFilter,
+  RegionMode,
   TextAnnotation,
 } from "../../types";
 
-type EditorTool = "crop" | "draw" | "text" | "blur";
+type EditorTool = "crop" | "draw" | "highlight" | "text" | "blur";
+
+const HIGHLIGHT_OPACITY = 0.35;
 
 interface PageEditorModalProps {
   page: ExtractedPage | null;
@@ -42,14 +46,26 @@ const MAX_CANVAS_HEIGHT = 640;
 const TOOL_CONFIG: { key: EditorTool; label: string; hint: string; Icon: typeof Crop }[] = [
   { key: "crop", label: "Crop", hint: "Drag to select the area to keep.", Icon: Crop },
   { key: "draw", label: "Draw", hint: "Draw freehand on the page.", Icon: Pencil },
+  {
+    key: "highlight",
+    label: "Highlight",
+    hint: "Drag a translucent marker over important lines.",
+    Icon: Highlighter,
+  },
   { key: "text", label: "Text", hint: "Click on the page to place text.", Icon: Type },
-  { key: "blur", label: "Blur", hint: "Drag a rectangle over anything to hide.", Icon: EyeOff },
+  {
+    key: "blur",
+    label: "Hide",
+    hint: "Drag a rectangle to blur or black out anything sensitive.",
+    Icon: EyeOff,
+  },
 ];
 
 const TOOL_CURSOR: Record<EditorTool, string> = {
   crop: "crosshair",
   blur: "crosshair",
   draw: "crosshair",
+  highlight: "crosshair",
   text: "text",
 };
 
@@ -65,7 +81,11 @@ export function PageEditorModal({
   const [tool, setTool] = useState<EditorTool>("crop");
   const [drawColor, setDrawColor] = useState("#d9480f");
   const [drawWidth, setDrawWidth] = useState(6);
+  const [highlightColor, setHighlightColor] = useState("#facc15");
+  const [highlightWidth, setHighlightWidth] = useState(16);
   const [blurIntensity, setBlurIntensity] = useState(18);
+  const [regionMode, setRegionMode] = useState<RegionMode>("blur");
+  const [fillColor, setFillColor] = useState("#000000");
   const [textValue, setTextValue] = useState("Confidential");
   const [textColor, setTextColor] = useState("#111111");
   const [textSize, setTextSize] = useState(28);
@@ -178,11 +198,14 @@ export function PageEditorModal({
 
   function transformEdits(nextRotation: number, nextCrop: CropBox | null): PageEdits {
     // Rotation/crop change the coordinate space annotations were placed in,
-    // so they cannot be carried over. The filter is coordinate-free and kept.
+    // so they cannot be carried over. Coordinate-free settings (filter and
+    // brightness/contrast adjustments) are kept.
     return {
       rotation: nextRotation,
       crop: nextCrop,
       filter: edits?.filter ?? "none",
+      brightness: edits?.brightness ?? 0,
+      contrast: edits?.contrast ?? 0,
       strokes: [],
       texts: [],
       blurRegions: [],
@@ -216,7 +239,16 @@ export function PageEditorModal({
     }
     event.currentTarget.setPointerCapture(event.pointerId);
     if (tool === "draw") {
-      setActiveStroke({ color: drawColor, width: drawWidth, points: [point] });
+      setActiveStroke({ color: drawColor, width: drawWidth, points: [point], opacity: 1 });
+      return;
+    }
+    if (tool === "highlight") {
+      setActiveStroke({
+        color: highlightColor,
+        width: highlightWidth,
+        points: [point],
+        opacity: HIGHLIGHT_OPACITY,
+      });
       return;
     }
     if (tool === "crop" || tool === "blur") {
@@ -250,7 +282,7 @@ export function PageEditorModal({
     if (!point) {
       return;
     }
-    if (tool === "draw" && activeStroke) {
+    if ((tool === "draw" || tool === "highlight") && activeStroke) {
       setActiveStroke((current) =>
         current
           ? {
@@ -273,7 +305,7 @@ export function PageEditorModal({
     if (!edits) {
       return;
     }
-    if (tool === "draw" && activeStroke) {
+    if ((tool === "draw" || tool === "highlight") && activeStroke) {
       if (activeStroke.points.length > 1) {
         setEdits({
           ...edits,
@@ -299,7 +331,12 @@ export function PageEditorModal({
             }),
           );
         } else {
-          const nextRegion: BlurRegion = { ...region, intensity: blurIntensity };
+          const nextRegion: BlurRegion = {
+            ...region,
+            intensity: blurIntensity,
+            mode: regionMode,
+            fillColor,
+          };
           setEdits({
             ...edits,
             blurRegions: [...edits.blurRegions, nextRegion],
@@ -438,6 +475,43 @@ export function PageEditorModal({
               ) : null}
             </div>
 
+            <div className="editor-control-group">
+              <span className="editor-group-label">Adjust</span>
+              <label>
+                <span>Brightness ({edits.brightness})</span>
+                <input
+                  type="range"
+                  min={-100}
+                  max={100}
+                  value={edits.brightness}
+                  onChange={(event) =>
+                    setEdits({ ...edits, brightness: Number(event.target.value) })
+                  }
+                />
+              </label>
+              <label>
+                <span>Contrast ({edits.contrast})</span>
+                <input
+                  type="range"
+                  min={-100}
+                  max={100}
+                  value={edits.contrast}
+                  onChange={(event) =>
+                    setEdits({ ...edits, contrast: Number(event.target.value) })
+                  }
+                />
+              </label>
+              {edits.brightness !== 0 || edits.contrast !== 0 ? (
+                <button
+                  className="secondary-button"
+                  onClick={() => setEdits({ ...edits, brightness: 0, contrast: 0 })}
+                  type="button"
+                >
+                  Reset adjustments
+                </button>
+              ) : null}
+            </div>
+
             {tool === "crop" ? (
               <div className="editor-control-group">
                 <span className="editor-group-label">Crop</span>
@@ -490,6 +564,29 @@ export function PageEditorModal({
               </div>
             ) : null}
 
+            {tool === "highlight" ? (
+              <div className="editor-control-group">
+                <label>
+                  <span>Highlight color</span>
+                  <input
+                    type="color"
+                    value={highlightColor}
+                    onChange={(event) => setHighlightColor(event.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Marker width</span>
+                  <input
+                    type="range"
+                    min={8}
+                    max={36}
+                    value={highlightWidth}
+                    onChange={(event) => setHighlightWidth(Number(event.target.value))}
+                  />
+                </label>
+              </div>
+            ) : null}
+
             {tool === "text" ? (
               <div className="editor-control-group">
                 <label>
@@ -519,17 +616,48 @@ export function PageEditorModal({
 
             {tool === "blur" ? (
               <div className="editor-control-group">
-                <label>
-                  <span>Blur strength</span>
-                  <input
-                    type="range"
-                    min={9}
-                    max={41}
-                    step={2}
-                    value={blurIntensity}
-                    onChange={(event) => setBlurIntensity(Number(event.target.value))}
-                  />
-                </label>
+                <span className="editor-group-label">Hide mode</span>
+                <div className="editor-toolbar editor-toolbar--icons">
+                  {(
+                    [
+                      ["blur", "Blur"],
+                      ["fill", "Black out"],
+                    ] as [RegionMode, string][]
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      className={`secondary-button editor-tool-btn ${
+                        regionMode === value ? "is-active" : ""
+                      }`}
+                      onClick={() => setRegionMode(value)}
+                      type="button"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {regionMode === "blur" ? (
+                  <label>
+                    <span>Blur strength</span>
+                    <input
+                      type="range"
+                      min={9}
+                      max={41}
+                      step={2}
+                      value={blurIntensity}
+                      onChange={(event) => setBlurIntensity(Number(event.target.value))}
+                    />
+                  </label>
+                ) : (
+                  <label>
+                    <span>Redaction color</span>
+                    <input
+                      type="color"
+                      value={fillColor}
+                      onChange={(event) => setFillColor(event.target.value)}
+                    />
+                  </label>
+                )}
               </div>
             ) : null}
 
@@ -540,6 +668,7 @@ export function PageEditorModal({
                 <span>
                   {edits.crop ? "Cropped" : "No crop"}
                   {edits.filter !== "none" ? ` · ${edits.filter} filter` : ""}
+                  {edits.brightness !== 0 || edits.contrast !== 0 ? " · adjusted" : ""}
                 </span>
                 <span>
                   {edits.strokes.length} drawing{edits.strokes.length === 1 ? "" : "s"} ·{" "}
@@ -582,6 +711,8 @@ export function PageEditorModal({
                     rotation: 0,
                     crop: null,
                     filter: "none",
+                    brightness: 0,
+                    contrast: 0,
                     strokes: [],
                     texts: [],
                     blurRegions: [],
@@ -736,9 +867,23 @@ function buildPreviewCanvas(
     crop.height,
   );
 
-  applyFilterPreview(croppedCtx, croppedCanvas.width, croppedCanvas.height, edits.filter);
+  applyFilterPreview(
+    croppedCtx,
+    croppedCanvas.width,
+    croppedCanvas.height,
+    edits.filter,
+    edits.brightness,
+    edits.contrast,
+  );
 
   for (const region of edits.blurRegions) {
+    if (region.mode === "fill") {
+      croppedCtx.save();
+      croppedCtx.fillStyle = region.fillColor || "#000000";
+      croppedCtx.fillRect(region.x, region.y, region.width, region.height);
+      croppedCtx.restore();
+      continue;
+    }
     const tempCanvas = document.createElement("canvas");
     tempCanvas.width = region.width;
     tempCanvas.height = region.height;
@@ -802,8 +947,11 @@ function applyFilterPreview(
   width: number,
   height: number,
   filter: PageFilter,
+  brightness: number,
+  contrast: number,
 ) {
-  if (filter === "none" || width < 1 || height < 1) {
+  const hasAdjustments = brightness !== 0 || contrast !== 0;
+  if ((filter === "none" && !hasAdjustments) || width < 1 || height < 1) {
     return;
   }
   let imageData: ImageData;
@@ -812,11 +960,23 @@ function applyFilterPreview(
   } catch {
     // Tainted canvas (image served without CORS headers): approximate the
     // look with the built-in canvas filter instead of crashing the preview.
-    applyCssFilterFallback(ctx, width, height, filter);
+    applyCssFilterFallback(ctx, width, height, filter, brightness, contrast);
     return;
   }
   const data = imageData.data;
+  // Same centered brightness/contrast math the backend applies on save.
+  const gain = 1 + (contrast / 100) * 0.8;
+  const offset = brightness * 0.8;
   for (let i = 0; i < data.length; i += 4) {
+    if (hasAdjustments) {
+      for (let channel = 0; channel < 3; channel += 1) {
+        const adjusted = (data[i + channel] - 128) * gain + 128 + offset;
+        data[i + channel] = Math.max(0, Math.min(255, adjusted));
+      }
+    }
+    if (filter === "none") {
+      continue;
+    }
     const luminance = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
     if (filter === "grayscale") {
       data[i] = data[i + 1] = data[i + 2] = luminance;
@@ -844,7 +1004,9 @@ function applyCssFilterFallback(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  filter: Exclude<PageFilter, "none">,
+  filter: PageFilter,
+  brightness: number,
+  contrast: number,
 ) {
   const copy = document.createElement("canvas");
   copy.width = width;
@@ -854,8 +1016,18 @@ function applyCssFilterFallback(
     return;
   }
   copyCtx.drawImage(ctx.canvas, 0, 0);
+  const parts: string[] = [];
+  if (brightness !== 0 || contrast !== 0) {
+    parts.push(`brightness(${1 + brightness / 125})`, `contrast(${1 + (contrast / 100) * 0.8})`);
+  }
+  if (filter !== "none") {
+    parts.push(CSS_FILTER_FALLBACK[filter]);
+  }
+  if (parts.length === 0) {
+    return;
+  }
   ctx.save();
-  ctx.filter = CSS_FILTER_FALLBACK[filter];
+  ctx.filter = parts.join(" ");
   ctx.clearRect(0, 0, width, height);
   ctx.drawImage(copy, 0, 0);
   ctx.restore();
@@ -868,6 +1040,7 @@ function drawStroke(context: CanvasRenderingContext2D, stroke: DrawStroke) {
   context.save();
   context.strokeStyle = stroke.color;
   context.lineWidth = stroke.width;
+  context.globalAlpha = stroke.opacity ?? 1;
   context.lineJoin = "round";
   context.lineCap = "round";
   context.beginPath();

@@ -16,6 +16,7 @@ def apply_page_edits(source_image_path: str, edits: PageEdits) -> np.ndarray:
 
     image = _rotate(source, edits.rotation)
     image = _crop(image, edits.crop)
+    image = _apply_adjustments(image, edits.brightness, edits.contrast)
     image = _apply_filter(image, edits.filter)
     image = _apply_blur_regions(image, edits.blur_regions)
     image = _apply_draw_and_text(image, edits.strokes, edits.texts)
@@ -74,6 +75,19 @@ def _crop(image: np.ndarray, crop: CropBox | None) -> np.ndarray:
     return image[y : y + crop_height, x : x + crop_width]
 
 
+def _apply_adjustments(image: np.ndarray, brightness: int, contrast: int) -> np.ndarray:
+    """Centered brightness/contrast, mirroring the editor's live preview math."""
+    brightness = max(-100, min(100, brightness))
+    contrast = max(-100, min(100, contrast))
+    if brightness == 0 and contrast == 0:
+        return image
+    # contrast -100..100 -> gain 0.2..1.8 around the mid-gray point.
+    gain = 1.0 + (contrast / 100.0) * 0.8
+    offset = brightness * 0.8
+    lut = np.clip((np.arange(256, dtype=np.float32) - 128.0) * gain + 128.0 + offset, 0, 255)
+    return cv2.LUT(image, lut.astype(np.uint8))
+
+
 def _apply_filter(image: np.ndarray, page_filter: str) -> np.ndarray:
     if page_filter == "grayscale":
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -114,6 +128,11 @@ def _apply_blur_regions(image: np.ndarray, regions: list[BlurRegion]) -> np.ndar
         y = max(0, min(region.y, height - 1))
         region_width = max(1, min(region.width, width - x))
         region_height = max(1, min(region.height, height - y))
+        if region.mode == "fill":
+            output[y : y + region_height, x : x + region_width] = _hex_to_bgr(
+                region.fill_color
+            )
+            continue
         patch = output[y : y + region_height, x : x + region_width]
         kernel = max(3, region.intensity | 1)
         output[y : y + region_height, x : x + region_width] = cv2.GaussianBlur(
@@ -122,6 +141,17 @@ def _apply_blur_regions(image: np.ndarray, regions: list[BlurRegion]) -> np.ndar
             0,
         )
     return output
+
+
+def _hex_to_bgr(color: str) -> tuple[int, int, int]:
+    value = color.lstrip("#")
+    if len(value) != 6:
+        return (0, 0, 0)
+    try:
+        red, green, blue = (int(value[i : i + 2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return (0, 0, 0)
+    return (blue, green, red)
 
 
 def _apply_draw_and_text(
@@ -134,11 +164,30 @@ def _apply_draw_and_text(
 
     rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     pil_image = Image.fromarray(rgb_image)
-    draw = ImageDraw.Draw(pil_image)
     font = _load_font()
 
+    translucent = [
+        stroke for stroke in strokes if stroke.opacity < 1.0 and len(stroke.points) >= 2
+    ]
+    if translucent:
+        # Highlighter strokes: draw on a transparent overlay so overlapping
+        # segments of one stroke blend once, then alpha-composite.
+        overlay = Image.new("RGBA", pil_image.size, (0, 0, 0, 0))
+        overlay_draw = ImageDraw.Draw(overlay)
+        for stroke in translucent:
+            alpha = max(0, min(255, int(round(stroke.opacity * 255))))
+            points = [(point.x, point.y) for point in stroke.points]
+            overlay_draw.line(
+                points,
+                fill=_hex_to_rgba(stroke.color, alpha),
+                width=max(1, stroke.width),
+                joint="curve",
+            )
+        pil_image = Image.alpha_composite(pil_image.convert("RGBA"), overlay).convert("RGB")
+
+    draw = ImageDraw.Draw(pil_image)
     for stroke in strokes:
-        if len(stroke.points) < 2:
+        if stroke.opacity < 1.0 or len(stroke.points) < 2:
             continue
         points = [(point.x, point.y) for point in stroke.points]
         draw.line(points, fill=stroke.color, width=max(1, stroke.width), joint="curve")
@@ -152,6 +201,17 @@ def _apply_draw_and_text(
         )
 
     return cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+
+
+def _hex_to_rgba(color: str, alpha: int) -> tuple[int, int, int, int]:
+    value = color.lstrip("#")
+    if len(value) != 6:
+        return (250, 204, 21, alpha)
+    try:
+        red, green, blue = (int(value[i : i + 2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return (250, 204, 21, alpha)
+    return (red, green, blue, alpha)
 
 
 def _load_font() -> ImageFont.ImageFont | ImageFont.FreeTypeFont:

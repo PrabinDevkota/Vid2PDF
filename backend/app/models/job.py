@@ -35,6 +35,8 @@ class DrawStroke:
     color: str
     width: int
     points: list[EditPoint] = field(default_factory=list)
+    # 1.0 = opaque pen; < 1.0 renders as a translucent highlighter stroke.
+    opacity: float = 1.0
 
 
 @dataclass
@@ -46,6 +48,9 @@ class TextAnnotation:
     font_size: int = 24
 
 
+RegionMode = Literal["blur", "fill"]
+
+
 @dataclass
 class BlurRegion:
     x: int
@@ -53,6 +58,9 @@ class BlurRegion:
     width: int
     height: int
     intensity: int = 18
+    # "blur" softens the region; "fill" redacts it with a solid color.
+    mode: RegionMode = "blur"
+    fill_color: str = "#000000"
 
 
 PageFilter = Literal["none", "enhance", "grayscale", "bw"]
@@ -63,6 +71,9 @@ class PageEdits:
     rotation: int = 0
     crop: CropBox | None = None
     filter: PageFilter = "none"
+    # -100..100; 0 leaves the page untouched.
+    brightness: int = 0
+    contrast: int = 0
     strokes: list[DrawStroke] = field(default_factory=list)
     texts: list[TextAnnotation] = field(default_factory=list)
     blur_regions: list[BlurRegion] = field(default_factory=list)

@@ -23,6 +23,8 @@ export interface DrawStroke {
   color: string;
   width: number;
   points: EditPoint[];
+  /** 1 = opaque pen; < 1 renders as a translucent highlighter stroke. */
+  opacity: number;
 }
 
 export interface TextAnnotation {
@@ -33,18 +35,26 @@ export interface TextAnnotation {
   fontSize: number;
 }
 
+export type RegionMode = "blur" | "fill";
+
 export interface BlurRegion {
   x: number;
   y: number;
   width: number;
   height: number;
   intensity: number;
+  /** "blur" softens the region; "fill" redacts it with a solid color. */
+  mode: RegionMode;
+  fillColor: string;
 }
 
 export interface PageEdits {
   rotation: number;
   crop: CropBox | null;
   filter: PageFilter;
+  /** -100..100; 0 leaves the page untouched. */
+  brightness: number;
+  contrast: number;
   strokes: DrawStroke[];
   texts: TextAnnotation[];
   blurRegions: BlurRegion[];

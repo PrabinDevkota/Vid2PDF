@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class EditPointPayload(BaseModel):
@@ -20,6 +20,7 @@ class DrawStrokePayload(BaseModel):
     color: str
     width: int
     points: list[EditPointPayload]
+    opacity: float = Field(default=1.0, ge=0.05, le=1.0)
 
 
 class TextAnnotationPayload(BaseModel):
@@ -36,6 +37,8 @@ class BlurRegionPayload(BaseModel):
     width: int
     height: int
     intensity: int
+    mode: Literal["blur", "fill"] = "blur"
+    fillColor: str = "#000000"
 
 
 PageFilterLiteral = Literal["none", "enhance", "grayscale", "bw"]
@@ -45,6 +48,8 @@ class PageEditsPayload(BaseModel):
     rotation: int
     crop: CropBoxPayload | None
     filter: PageFilterLiteral = "none"
+    brightness: int = Field(default=0, ge=-100, le=100)
+    contrast: int = Field(default=0, ge=-100, le=100)
     strokes: list[DrawStrokePayload]
     texts: list[TextAnnotationPayload]
     blurRegions: list[BlurRegionPayload]
@@ -54,6 +59,8 @@ class UpdatePageEditsPayload(BaseModel):
     rotation: int = 0
     crop: CropBoxPayload | None = None
     filter: PageFilterLiteral = "none"
+    brightness: int = Field(default=0, ge=-100, le=100)
+    contrast: int = Field(default=0, ge=-100, le=100)
     strokes: list[DrawStrokePayload] = []
     texts: list[TextAnnotationPayload] = []
     blurRegions: list[BlurRegionPayload] = []

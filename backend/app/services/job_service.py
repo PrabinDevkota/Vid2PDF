@@ -470,6 +470,8 @@ class JobService:
                     rotation=rotation,
                     crop=CropBox(x=x, y=y, width=width, height=height),
                     filter=page.edits.filter,
+                    brightness=page.edits.brightness,
+                    contrast=page.edits.contrast,
                 )
                 self._render_page_artifacts(page)
                 self._invalidate_page_ocr(page)
@@ -1632,6 +1634,8 @@ class JobService:
         return PageEdits(
             rotation=payload.rotation % 360,
             filter=payload.filter,
+            brightness=payload.brightness,
+            contrast=payload.contrast,
             crop=None
             if payload.crop is None
             else CropBox(
@@ -1645,6 +1649,7 @@ class JobService:
                     color=stroke.color,
                     width=stroke.width,
                     points=[EditPoint(x=point.x, y=point.y) for point in stroke.points],
+                    opacity=stroke.opacity,
                 )
                 for stroke in payload.strokes
             ],
@@ -1665,6 +1670,8 @@ class JobService:
                     width=region.width,
                     height=region.height,
                     intensity=region.intensity,
+                    mode=region.mode,
+                    fill_color=region.fillColor,
                 )
                 for region in payload.blurRegions
             ],
@@ -1686,6 +1693,8 @@ class JobService:
         return PageEditsPayload(
             rotation=edits.rotation,
             filter=edits.filter,
+            brightness=edits.brightness,
+            contrast=edits.contrast,
             crop=crop,
             strokes=[
                 DrawStrokePayload(
@@ -1695,6 +1704,7 @@ class JobService:
                         EditPointPayload(x=point.x, y=point.y)
                         for point in stroke.points
                     ],
+                    opacity=stroke.opacity,
                 )
                 for stroke in edits.strokes
             ],
@@ -1715,6 +1725,8 @@ class JobService:
                     width=region.width,
                     height=region.height,
                     intensity=region.intensity,
+                    mode=region.mode,
+                    fillColor=region.fill_color,
                 )
                 for region in edits.blur_regions
             ],
@@ -1724,6 +1736,8 @@ class JobService:
         return {
             "rotation": edits.rotation,
             "filter": edits.filter,
+            "brightness": edits.brightness,
+            "contrast": edits.contrast,
             "crop": None
             if edits.crop is None
             else {
@@ -1737,6 +1751,7 @@ class JobService:
                     "color": stroke.color,
                     "width": stroke.width,
                     "points": [{"x": point.x, "y": point.y} for point in stroke.points],
+                    "opacity": stroke.opacity,
                 }
                 for stroke in edits.strokes
             ],
@@ -1757,6 +1772,8 @@ class JobService:
                     "width": region.width,
                     "height": region.height,
                     "intensity": region.intensity,
+                    "mode": region.mode,
+                    "fill_color": region.fill_color,
                 }
                 for region in edits.blur_regions
             ],
@@ -1789,6 +1806,7 @@ class JobService:
                         for point in stroke_payload.get("points", [])
                         if isinstance(point, dict)
                     ],
+                    opacity=min(max(float(stroke_payload.get("opacity", 1.0)), 0.05), 1.0),
                 )
             )
 
@@ -1810,6 +1828,7 @@ class JobService:
         for region_payload in payload.get("blur_regions", []):
             if not isinstance(region_payload, dict):
                 continue
+            region_mode = region_payload.get("mode", "blur")
             blur_regions.append(
                 BlurRegion(
                     x=int(region_payload.get("x", 0)),
@@ -1817,6 +1836,8 @@ class JobService:
                     width=int(region_payload.get("width", 0)),
                     height=int(region_payload.get("height", 0)),
                     intensity=int(region_payload.get("intensity", 18)),
+                    mode=region_mode if region_mode in {"blur", "fill"} else "blur",
+                    fill_color=str(region_payload.get("fill_color", "#000000")),
                 )
             )
 
@@ -1827,6 +1848,8 @@ class JobService:
         return PageEdits(
             rotation=int(payload.get("rotation", 0)) % 360,
             filter=stored_filter,  # type: ignore[arg-type]
+            brightness=max(-100, min(100, int(payload.get("brightness", 0)))),
+            contrast=max(-100, min(100, int(payload.get("contrast", 0)))),
             crop=crop,
             strokes=strokes,
             texts=texts,

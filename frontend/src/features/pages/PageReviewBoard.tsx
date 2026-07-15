@@ -925,6 +925,8 @@ function hasEdits(page: ExtractedPage): boolean {
     page.edits.rotation !== 0 ||
     page.edits.crop !== null ||
     (page.edits.filter ?? "none") !== "none" ||
+    (page.edits.brightness ?? 0) !== 0 ||
+    (page.edits.contrast ?? 0) !== 0 ||
     page.edits.strokes.length > 0 ||
     page.edits.texts.length > 0 ||
     page.edits.blurRegions.length > 0

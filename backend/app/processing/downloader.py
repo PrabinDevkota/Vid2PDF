@@ -35,13 +35,19 @@ def download_video(
     output_root.mkdir(parents=True, exist_ok=True)
     output_template = str(output_root / f"{job_id}-%(title).80B.%(ext)s")
 
-    # Without ffmpeg, merging separate video+audio streams fails, so prefer
-    # progressive formats in that case. We only need the video track anyway.
+    # Without ffmpeg, merging separate video+audio streams fails. Progressive
+    # formats top out at 720p on major sites, which visibly degraded exports,
+    # so prefer a video-only stream (frames are all the pipeline needs; the
+    # review player just plays it silent).
     has_ffmpeg = shutil.which("ffmpeg") is not None
     if has_ffmpeg:
         format_spec = "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"
     else:
-        format_spec = "best[height<=1080][ext=mp4]/best[height<=720]/best"
+        format_spec = (
+            "bestvideo[vcodec^=avc1][height<=1080]"
+            "/bestvideo[height<=1080][ext=mp4]/bestvideo[height<=1080]"
+            "/best[height<=1080][ext=mp4]/best"
+        )
 
     options = {
         "format": format_spec,
