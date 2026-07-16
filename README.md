@@ -124,16 +124,22 @@ npm run dev
 - `POST /api/jobs/{job_id}/cancel` — cancel a queued or processing job
 - `POST /api/jobs/{job_id}/rejected/{rejected_id}/restore` — promote a pipeline-rejected frame to a page
 - `DELETE /api/jobs/{job_id}`
-- `POST /api/jobs/{job_id}/export` — image PDF
+- `PATCH /api/jobs/{job_id}/pages/{page_id}` — rotation, deletion, page edits, or a manual OCR text correction
+- `GET /api/jobs/{job_id}/pages/{page_id}/crop-suggestion` — auto-detected document crop box
+- `GET /api/jobs/{job_id}/pages/{page_id}/skew-suggestion` — auto-detected straightening angle
+- `POST /api/jobs/{job_id}/pages/autocrop` — crop every page to its detected paper area
+- `POST /api/jobs/{job_id}/export` — lossless image PDF; body accepts `pageSize` (`auto`/`a4`/`letter`) and `margin`
+- `POST /api/jobs/export/merged` — combine the pages of several jobs into one PDF
 - `POST /api/jobs/{job_id}/export/text` — OCR + LaTeX/Tectonic text PDF
-- `POST /api/jobs/{job_id}/export/searchable` — image PDF with invisible OCR text layer
+- `POST /api/jobs/{job_id}/export/searchable` — pixel-identical image pages with an invisible OCR text layer
 
 ## Assumptions
 
 - v1 is single-video in, PDF out (image, text, and searchable variants)
-- target inputs are screen recordings of digital documents (camera mode also supported)
+- target inputs are screen recordings of digital documents (camera mode also supported, with a cleaned-scan or original-color page style)
 - text PDF fidelity prioritizes content completeness over perfect layout recreation
-- job state is persisted to JSON under `backend/data`
+- job state is persisted to JSON under `backend/data` (written atomically); orphaned artifacts are cleaned up at startup
+- source videos are kept until the job is deleted; set `upload_retention_days` in `backend/app/core/settings.py` to expire them after N days
 
 ## Contributing
 
