@@ -1,5 +1,7 @@
 # Vid2PDF
 
+[![CI](https://github.com/PrabinDevkota/Vid2PDF/actions/workflows/ci.yml/badge.svg)](https://github.com/PrabinDevkota/Vid2PDF/actions/workflows/ci.yml)
+
 Vid2PDF reconstructs a clean PDF from a screen recording of a digital document being viewed page by page.
 
 It is structured around a document reconstruction pipeline rather than generic frame dumping:
@@ -11,8 +13,8 @@ It is structured around a document reconstruction pipeline rather than generic f
 5. remove duplicates and weak pages — the strongest rejected candidates are kept and can be restored from the Rejected tab
 6. generate previews for review
 7. extract text from unique page frames (OCR)
-8. let the user delete, rotate, reorder, and clean up pages (enhance / grayscale / B&W filters), with keyboard shortcuts for review (press `?` in the app)
-9. export an image PDF, a LaTeX-typeset text PDF (via Tectonic), and/or a searchable PDF (original page images with an invisible OCR text layer)
+8. let the user review and edit pages: delete, rotate, straighten (manual or auto-deskew), crop (manual or auto-crop to the detected paper), zoom, draw, highlight, place text, blur or black out regions, adjust brightness/contrast, apply cleanup filters (enhance / grayscale / B&W), correct OCR text by hand — with full undo/redo (Ctrl+Z / Ctrl+Y) and keyboard shortcuts for review (press `?` in the app)
+9. export a lossless image PDF (image-sized, A4, or Letter pages), a LaTeX-typeset text PDF (via Tectonic), a searchable PDF (pixel-identical page images with an invisible OCR text layer), or combine several sessions into a single PDF
 
 Jobs can be cancelled while queued or processing, progress streams live over
 server-sent events, and the UI supports light, dark, and system themes.
@@ -41,9 +43,11 @@ Vid2PDF/
 
 The frontend is a Vite React app focused on:
 
-- uploading recordings (single or batch) or pasting a video URL, with an optional processing time range
-- reviewing extracted pages before export (delete, rotate, reorder, cleanup filters, restore rejected candidates, reprocess with different sensitivity, keyboard shortcuts)
-- exporting image PDF, text PDF, and searchable PDF artifacts
+- uploading recordings (single or batch) or pasting a video URL, with an optional processing time range and a camera page style (cleaned scan or original color)
+- reviewing extracted pages before export (delete, rotate, reorder, restore rejected candidates, reprocess with different sensitivity, keyboard shortcuts)
+- a page editor with zoom, undo/redo, auto-crop, auto-straighten, drawing, highlighting, text, blur/black-out redaction, brightness/contrast, and cleanup filters
+- per-page OCR confidence badges and inline OCR text correction (useful for handwriting)
+- exporting image PDF (with page-size options), text PDF, searchable PDF, and combined multi-session PDFs
 - live job progress over server-sent events (with polling fallback) and a light/dark/system theme toggle
 
 ### Backend
