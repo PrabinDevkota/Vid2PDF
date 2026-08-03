@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/PrabinDevkota/Vid2PDF/actions/workflows/ci.yml/badge.svg)](https://github.com/PrabinDevkota/Vid2PDF/actions/workflows/ci.yml)
 
-Vid2PDF reconstructs a clean PDF from a screen recording of a digital document being viewed page by page.
+Vid2PDF reconstructs a clean PDF from a screen recording of a digital document being viewed page by page alsp processing goingon for Latex based output for clean PDF.
 
 It is structured around a document reconstruction pipeline rather than generic frame dumping:
 
